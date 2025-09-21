@@ -1,0 +1,11 @@
+.{
+    .name = .bonzai,
+    .fingerprint = 0x258b01c239c3c338,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.15.1",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

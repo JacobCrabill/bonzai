@@ -78,9 +78,9 @@ test "[Fallback] run to success" {
     try std.testing.expectEqualStrings(fb.node.name, name);
 
     // Create a few child nodes to add to the Fallback
-    var f1 = try AlwaysFailure.init("failure-1", alloc);
-    var f2 = try AlwaysFailure.init("failure-2", alloc);
-    var s1 = try AlwaysSuccess.init("success-1", alloc);
+    var f1 = try AlwaysFailure.init(alloc, "failure-1");
+    var f2 = try AlwaysFailure.init(alloc, "failure-2");
+    var s1 = try AlwaysSuccess.init(alloc, "success-1");
 
     try fb.control.addChild(alloc, &f1.node);
     try fb.control.addChild(alloc, &f2.node);
@@ -103,9 +103,9 @@ test "[Fallback] run to failure" {
     try std.testing.expectEqualStrings(fb.node.name, name);
 
     // Create a few child nodes to add to the Fallback
-    var f1 = try AlwaysFailure.init("failure-1", alloc);
-    var f2 = try AlwaysFailure.init("failure-2", alloc);
-    var f3 = try AlwaysFailure.init("failure-3", alloc);
+    var f1 = try AlwaysFailure.init(alloc, "failure-1");
+    var f2 = try AlwaysFailure.init(alloc, "failure-2");
+    var f3 = try AlwaysFailure.init(alloc, "failure-3");
 
     try fb.control.addChild(alloc, &f1.node);
     try fb.control.addChild(alloc, &f2.node);

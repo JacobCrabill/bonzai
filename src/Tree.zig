@@ -1,28 +1,71 @@
 pub const Tree = @This();
 
-root: *Node,
-nodes: ArrayList(*Node),
-loggers: ArrayList(Logger),
+allocator: Allocator,
+root: ?*Node = null,
+nodes: ArrayList(*Node) = .empty,
+loggers: ArrayList(*Logger) = .empty,
 
-fn applyRecursiveVisitor(node: *Node, visitor: *const fn (*Node) void) void {
-    switch (node.kind) {
-        .control => {
-            const control: *Control = @ptrCast(@alignCast(node));
-            for (control.children.items) |child| {
-                visitor(child);
-                applyRecursiveVisitor(child);
-            }
-        },
-        .decorator => {
-            // TODO
-        },
-    }
-
-    visitor(node);
+pub fn init(alloc: Allocator) Tree {
+    return .{
+        .allocator = alloc,
+    };
 }
 
-pub fn addLogger(tree: *Tree, alloc: Allocator, logger: Logger) !void {
+pub fn deinit(tree: *Tree, alloc: Allocator) void {
+    if (tree.root) |*root| root.*.deinit(alloc);
+    tree.nodes.deinit(alloc);
+    tree.loggers.deinit(alloc);
+}
+
+pub fn tick(tree: *Tree) Node.Status {
+    return if (tree.root) |root| root.tick() else .failure;
+}
+
+const Visitor = struct {
+    alloc: Allocator,
+    logger: *Logger,
+
+    pub fn visit(ctx: anytype, node: *Node) void {
+        const visitor: Visitor = @as(Visitor, ctx);
+        node.status_changed_cbs.append(visitor.alloc, .{
+            .ctx = visitor.logger,
+            .callback = Logger.callback,
+        }) catch @panic("OOM");
+    }
+};
+
+/// Add the given logger as a Status Change callback to all Nodes in the Tree
+pub fn addLogger(tree: *Tree, alloc: Allocator, logger: *Logger) !void {
     try tree.loggers.append(alloc, logger);
+
+    const visitor = Visitor{
+        .alloc = alloc,
+        .logger = logger,
+    };
+
+    if (tree.root) |root| {
+        applyRecursiveVisitor(root, visitor, Visitor.visit);
+    }
+}
+
+/// Recursively applies the function defined via 'ctx' and 'visitor' to the node.
+/// The visitor is applied depth-first to any and all child nodes.
+fn applyRecursiveVisitor(node: *Node, ctx: anytype, visitor: *const fn (anytype, *Node) void) void {
+    switch (node.data) {
+        .control => |control| {
+            for (control.children.items) |child| {
+                applyRecursiveVisitor(child, ctx, visitor);
+                visitor(ctx, child);
+            }
+        },
+        .decorator => |d| {
+            applyRecursiveVisitor(d.child, ctx, visitor);
+            visitor(ctx, d.child);
+        },
+        else => {},
+    }
+
+    visitor(ctx, node);
 }
 
 const Node = @import("Node.zig");
@@ -32,3 +75,15 @@ const Control = @import("base_types/Control.zig");
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
+
+test "[Tree] Add Logger, No Nodes" {
+    const alloc = std.testing.allocator;
+
+    var tree = Tree.init(alloc);
+    defer tree.deinit(alloc);
+
+    var logger = @import("loggers/StdoutLogger.zig").init();
+    try tree.addLogger(alloc, &logger.logger);
+
+    try std.testing.expectEqual(.failure, tree.tick());
+}

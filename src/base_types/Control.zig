@@ -17,7 +17,7 @@ pub fn numChildren(control: *const Control) usize {
     return control.children.items.len;
 }
 
-pub fn getChild(control: *Control, idx: usize) *Node {
+pub fn getChild(control: *const Control, idx: usize) *Node {
     return control.children.items[idx];
 }
 

@@ -3,17 +3,17 @@
 //! If any child returns Failure, the Sequence returns Failure.
 const Sequence = @This();
 
-control: Control,
 node: Node,
 current_child: usize = 0,
 
 pub fn tick(node: *Node) Node.Status {
     const seq: *Sequence = @alignCast(@fieldParentPtr("node", node));
+    var control = node.data.control;
 
-    if (seq.current_child >= seq.control.numChildren()) return .failure;
+    if (seq.current_child >= control.numChildren()) return .failure;
 
     // Tick the current child, then handle the result
-    const child_status = seq.control.getChild(seq.current_child).tick();
+    const child_status = control.getChild(seq.current_child).tick();
 
     switch (child_status) {
         .success => seq.current_child += 1,
@@ -24,7 +24,7 @@ pub fn tick(node: *Node) Node.Status {
         },
     }
 
-    if (seq.current_child == seq.control.numChildren())
+    if (seq.current_child == control.numChildren())
         return .success;
 
     return .running;
@@ -33,26 +33,34 @@ pub fn tick(node: *Node) Node.Status {
 /// Halt the node and all of its children
 pub fn halt(node: *Node) void {
     const seq: *Sequence = @alignCast(@fieldParentPtr("node", node));
-    seq.control.halt();
     seq.current_child = 0;
 }
 
 /// Initialize a new Sequence node.
 pub fn init(alloc: Allocator, name: []const u8) !Sequence {
     return .{
-        .control = .{},
         .node = try .init(alloc, name, .control, .{
             .tick = tick,
             .halt = halt,
-            .deinit = deinit,
         }),
     };
 }
 
-/// Deinitialize the node and free all resources
+/// Deinit and destroy the Sequence instance
 pub fn deinit(node: *Node, alloc: Allocator) void {
     const seq: *Sequence = @alignCast(@fieldParentPtr("node", node));
-    seq.control.deinit(alloc);
+    alloc.destroy(seq);
+}
+
+/// Create a new Sequence node, returning the base Node pointer
+pub fn create(alloc: Allocator, name: []const u8) anyerror!*Node {
+    var node = try alloc.create(Sequence);
+    node.node = try .init(alloc, name, .control, .{
+        .tick = tick,
+        .halt = halt,
+        .deinit = deinit,
+    });
+    return &node.node;
 }
 
 const Node = @import("../../Node.zig");
@@ -78,13 +86,13 @@ test "[Sequence] run to failure" {
     try std.testing.expectEqualStrings(seq.node.name, name);
 
     // Create a few child nodes to add to the Sequence
-    var s1 = try AlwaysSuccess.init("success-1", alloc);
-    var s2 = try AlwaysSuccess.init("success-2", alloc);
-    var f1 = try AlwaysFailure.init("failure-1", alloc);
+    var s1 = try AlwaysSuccess.init(alloc, "success-1");
+    var s2 = try AlwaysSuccess.init(alloc, "success-2");
+    var f1 = try AlwaysFailure.init(alloc, "failure-1");
 
-    try seq.control.addChild(alloc, &s1.node);
-    try seq.control.addChild(alloc, &s2.node);
-    try seq.control.addChild(alloc, &f1.node);
+    try seq.node.data.control.addChild(alloc, &s1.node);
+    try seq.node.data.control.addChild(alloc, &s2.node);
+    try seq.node.data.control.addChild(alloc, &f1.node);
 
     // We should be able to tick the Sequence 3 times, return Running, Running, Failure
     try std.testing.expectEqual(.running, seq.node.tick());
@@ -103,13 +111,13 @@ test "[Sequence] run to success" {
     try std.testing.expectEqualStrings(seq.node.name, name);
 
     // Create a few child nodes to add to the Sequence
-    var s1 = try AlwaysSuccess.init("success-1", alloc);
-    var s2 = try AlwaysSuccess.init("success-2", alloc);
-    var s3 = try AlwaysSuccess.init("success-3", alloc);
+    var s1 = try AlwaysSuccess.init(alloc, "success-1");
+    var s2 = try AlwaysSuccess.init(alloc, "success-2");
+    var s3 = try AlwaysSuccess.init(alloc, "success-3");
 
-    try seq.control.addChild(alloc, &s1.node);
-    try seq.control.addChild(alloc, &s2.node);
-    try seq.control.addChild(alloc, &s3.node);
+    try seq.node.data.control.addChild(alloc, &s1.node);
+    try seq.node.data.control.addChild(alloc, &s2.node);
+    try seq.node.data.control.addChild(alloc, &s3.node);
 
     // We should be able to tick the Sequence 3 times, return Running, Running, Failure
     try std.testing.expectEqual(.running, seq.node.tick());

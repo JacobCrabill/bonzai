@@ -4,14 +4,22 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const mod = b.addModule("bonzai", .{
-        .root_source_file = b.path("src/root.zig"),
+    const ziggy = b.dependency("ziggy", .{ .target = target, .optimize = optimize }).module("ziggy");
+
+    const bonzai = b.addModule("bonzai", .{
+        .root_source_file = b.path("src/bonzai.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{.{ .name = "ziggy", .module = ziggy }},
     });
 
+    const imports: []const std.Build.Module.Import = &.{
+        .{ .name = "bonzai", .module = bonzai },
+        .{ .name = "ziggy", .module = ziggy },
+    };
+
     const mod_tests = b.addTest(.{
-        .root_module = mod,
+        .root_module = bonzai,
         .test_runner = .{ .path = b.path("tools/test_runner.zig"), .mode = .simple },
     });
     const run_mod_tests = b.addRunArtifact(mod_tests);
@@ -21,7 +29,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/tests/test.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{.{ .name = "bonzai", .module = mod }},
+            .imports = imports,
         }),
         .test_runner = .{ .path = b.path("tools/test_runner.zig"), .mode = .simple },
     });

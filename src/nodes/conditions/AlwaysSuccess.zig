@@ -6,7 +6,7 @@ pub fn tick(_: *Node) Node.Status {
     return .success;
 }
 
-pub fn init(name: []const u8, alloc: std.mem.Allocator) !AlwaysSuccess {
+pub fn init(alloc: std.mem.Allocator, name: []const u8) !AlwaysSuccess {
     return .{
         .node = try .init(alloc, name, .condition, .{
             .tick = tick,

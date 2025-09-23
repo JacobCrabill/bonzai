@@ -52,3 +52,61 @@ pub fn registerBuiltinTypes(factory: *Factory) !void {
 test "All Bonzai Module Tests" {
     std.testing.refAllDecls(@This());
 }
+
+test "Parse from JSON File" {
+    const gpa = std.testing.allocator;
+    var arena_state = std.heap.ArenaAllocator.init(gpa);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const str = @embedFile("tests/json/test-tree.json");
+
+    const value = try std.json.parseFromSliceLeaky(std.json.Value, arena, str, .{});
+
+    var stdout = std.fs.File.stdout().writer(&.{});
+    const writer = &stdout.interface;
+    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, writer);
+
+    // Examle of traversing the tree
+    const nodelist = value.object.get("nodes").?;
+    const root_kind = nodelist.array.items[0].object.get("kind").?.string;
+    try std.testing.expectEqualStrings("Sequence", root_kind);
+}
+
+// NOTE: Ziggy cannot handle any form of recursive types,
+// while basically _all_ of our types are recursive
+// test "Parse from Ziggy file" {
+//     const ziggy = @import("ziggy");
+//     const gpa = std.testing.allocator;
+//     var arena_state = std.heap.ArenaAllocator.init(gpa);
+//     defer arena_state.deinit();
+//     const arena = arena_state.allocator();
+//
+//     const ZiggyNode = struct {
+//         const Self = @This();
+//         kind: []const u8,
+//         name: []const u8,
+//         // children: ?*anyopaque,
+//         // children: ?[]const *@This() = null,
+//         data: ?std.json.Value = null,
+//         // const Child = union {
+//         //     child: Self,
+//         //     children: []const Self,
+//         // };
+//     };
+//
+//     const ZiggyTree = struct {
+//         nodes: []const ZiggyNode,
+//     };
+//
+//     const case = @embedFile("tests/ziggy/test-tree.ziggy");
+//
+//     var diag: ziggy.Diagnostic = .{ .path = null };
+//     _ = ziggy.parseLeaky(ZiggyTree, arena, case, .{
+//         .diagnostic = &diag,
+//     }) catch |err| {
+//         if (err != error.Syntax) @panic("wrong error!");
+//         std.debug.print("{f}", .{diag.fmt(case)});
+//         std.process.exit(1);
+//     };
+// }

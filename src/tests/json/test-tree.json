@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    {
+      "kind": "Sequence",
+      "name": "root",
+      "data": {
+        "children": [
+          {
+            "kind": "AlwaysSuccess",
+            "name": "success!"
+          }
+        ]
+      }
+    }
+  ]
+}

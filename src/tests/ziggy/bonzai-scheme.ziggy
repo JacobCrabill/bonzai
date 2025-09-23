@@ -1,0 +1,11 @@
+root = Tree
+
+struct Tree {
+  nodes: [Node],
+}
+
+struct Node {
+  kind: bytes,
+  name: bytes,
+  children: ?[Node],
+}

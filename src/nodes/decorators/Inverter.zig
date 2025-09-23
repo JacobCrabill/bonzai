@@ -13,12 +13,25 @@ pub fn tick(node: *Node) Node.Status {
     };
 }
 
-pub fn init(alloc: Allocator, name: []const u8) !Inverter {
-    return .{
-        .node = try .init(alloc, name, .decorator, .{
-            .tick = tick,
-        }),
-    };
+/// Initialize a new node of this type
+pub fn init(self: *@This(), alloc: Allocator, name: []const u8) !void {
+    self.node = try .init(alloc, name, .decorator, .{
+        .tick = tick,
+        .deinit = deinit,
+    });
+}
+
+/// Create an instance of this node type
+pub fn create(alloc: Allocator, name: []const u8) !*Node {
+    var node = try alloc.create(@This());
+    try node.init(alloc, name);
+    return &node.node;
+}
+
+/// Destroy this node instance
+pub fn deinit(node: *Node, alloc: Allocator) void {
+    const self: *@This() = @alignCast(@fieldParentPtr("node", node));
+    alloc.destroy(self);
 }
 
 const Node = @import("../../Node.zig");
@@ -37,46 +50,46 @@ test "[Inverter] basics" {
 
     {
         const name = "running";
-        var inv = try Inverter.init(alloc, name);
-        defer inv.node.deinit(alloc);
+        const inv: *Node = try Inverter.create(alloc, name);
+        defer inv.deinit(alloc);
 
-        try std.testing.expectEqualStrings(inv.node.name, name);
+        try std.testing.expectEqualStrings(inv.name, name);
 
-        var s1 = try AlwaysRunning.init(alloc, "running-1");
-        inv.node.data.decorator.child = &s1.node;
-        try std.testing.expectEqual(.running, inv.node.tick());
+        const s1 = try AlwaysRunning.create(alloc, "running-1");
+        inv.data.decorator.child = s1;
+        try std.testing.expectEqual(.running, inv.tick());
 
-        inv.node.halt();
-        try std.testing.expectEqual(.idle, inv.node.data.decorator.child.status);
+        inv.halt();
+        try std.testing.expectEqual(.idle, inv.data.decorator.child.status);
     }
 
     {
         const name = "failure";
-        var inv = try Inverter.init(alloc, name);
-        defer inv.node.deinit(alloc);
+        const inv: *Node = try Inverter.create(alloc, name);
+        defer inv.deinit(alloc);
 
-        try std.testing.expectEqualStrings(inv.node.name, name);
+        try std.testing.expectEqualStrings(inv.name, name);
 
-        var s1 = try AlwaysSuccess.init(alloc, "success-1");
-        inv.node.data.decorator.child = &s1.node;
-        try std.testing.expectEqual(.failure, inv.node.tick());
+        const s1 = try AlwaysSuccess.create(alloc, "success-1");
+        inv.data.decorator.child = s1;
+        try std.testing.expectEqual(.failure, inv.tick());
 
-        inv.node.halt();
-        try std.testing.expectEqual(.idle, inv.node.data.decorator.child.status);
+        inv.halt();
+        try std.testing.expectEqual(.idle, inv.data.decorator.child.status);
     }
 
     {
         const name = "success";
-        var inv = try Inverter.init(alloc, name);
-        defer inv.node.deinit(alloc);
+        const inv = try Inverter.create(alloc, name);
+        defer inv.deinit(alloc);
 
-        try std.testing.expectEqualStrings(inv.node.name, name);
+        try std.testing.expectEqualStrings(inv.name, name);
 
-        var s1 = try AlwaysFailure.init(alloc, "failure-1");
-        inv.node.data.decorator.child = &s1.node;
-        try std.testing.expectEqual(.success, inv.node.tick());
+        const s1 = try AlwaysFailure.create(alloc, "failure-1");
+        inv.data.decorator.child = s1;
+        try std.testing.expectEqual(.success, inv.tick());
 
-        inv.node.halt();
-        try std.testing.expectEqual(.idle, inv.node.data.decorator.child.status);
+        inv.halt();
+        try std.testing.expectEqual(.idle, inv.data.decorator.child.status);
     }
 }

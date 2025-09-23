@@ -24,9 +24,8 @@ pub fn deinit(factory: *Factory) void {
 }
 
 /// Register a builder function
-pub fn registerNode(factory: *Factory, T: anytype, func: BuilderFn) !void {
-    std.debug.print("Registering node type: {s}\n", .{@typeName(T)});
-    try factory.registry.put(factory.gpa, @typeName(T), func);
+pub fn registerNode(factory: *Factory, typename: []const u8, func: BuilderFn) !void {
+    try factory.registry.put(factory.gpa, typename, func);
 }
 
 /// Create a new Node of the given type
@@ -49,11 +48,11 @@ test "[Factory] Register & Create Nodes" {
     const Sequence = @import("nodes/controls/Sequence.zig");
     const AlwaysRunning = @import("nodes/actions/AlwaysRunning.zig");
 
-    try factory.registerNode(Sequence, Sequence.create);
-    try factory.registerNode(AlwaysRunning, AlwaysRunning.create);
+    try factory.registerNode("Sequence", Sequence.create);
+    try factory.registerNode("AlwaysRunning", AlwaysRunning.create);
 
-    const seq_node: *Node = try factory.createNode("nodes.controls.Sequence", "seq-1");
-    const ar_node: *Node = try factory.createNode("nodes.actions.AlwaysRunning", "run-1");
+    const seq_node: *Node = try factory.createNode("Sequence", "seq-1");
+    const ar_node: *Node = try factory.createNode("AlwaysRunning", "run-1");
     defer seq_node.deinit(gpa);
     defer ar_node.deinit(gpa);
 }

@@ -13,8 +13,8 @@ test "[Tree] Tick tree with lgoger" {
     var tree = bonzai.Tree.init(alloc);
     defer tree.deinit(alloc);
 
-    var seq = try bonzai.nodes.Sequence.init(alloc, "root");
-    tree.root = &seq.node;
+    const seq_node: *bonzai.Node = try bonzai.nodes.controls.Sequence.create(alloc, "root");
+    tree.root = seq_node;
 
     var logger = bonzai.loggers.StdoutLogger.init();
     try tree.addLogger(alloc, &logger.logger);

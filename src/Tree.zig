@@ -21,32 +21,34 @@ pub fn tick(tree: *Tree) Node.Status {
     return if (tree.root) |root| root.tick() else .failure;
 }
 
-const Visitor = struct {
+/// Add the given logger as a Status Change callback to all Nodes in the Tree
+pub fn addLogger(tree: *Tree, alloc: Allocator, logger: *Logger) !void {
+    try tree.loggers.append(alloc, logger);
+
+    const visitor = LoggerVisitor{
+        .alloc = alloc,
+        .logger = logger,
+    };
+
+    if (tree.root) |root| {
+        applyRecursiveVisitor(root, visitor, LoggerVisitor.visit);
+    }
+}
+
+/// Struct to act as a capture group for an allocator and a Logger,
+/// for use with applyRecursiveVisitor
+const LoggerVisitor = struct {
     alloc: Allocator,
     logger: *Logger,
 
     pub fn visit(ctx: anytype, node: *Node) void {
-        const visitor: Visitor = @as(Visitor, ctx);
+        const visitor: LoggerVisitor = @as(LoggerVisitor, ctx);
         node.status_changed_cbs.append(visitor.alloc, .{
             .ctx = visitor.logger,
             .callback = Logger.callback,
         }) catch @panic("OOM");
     }
 };
-
-/// Add the given logger as a Status Change callback to all Nodes in the Tree
-pub fn addLogger(tree: *Tree, alloc: Allocator, logger: *Logger) !void {
-    try tree.loggers.append(alloc, logger);
-
-    const visitor = Visitor{
-        .alloc = alloc,
-        .logger = logger,
-    };
-
-    if (tree.root) |root| {
-        applyRecursiveVisitor(root, visitor, Visitor.visit);
-    }
-}
 
 /// Recursively applies the function defined via 'ctx' and 'visitor' to the node.
 /// The visitor is applied depth-first to any and all child nodes.

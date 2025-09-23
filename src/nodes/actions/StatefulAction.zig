@@ -1,5 +1,7 @@
 //! A StatefulAction is an Action node which tracks its current state and
 //! chooses the correct method to call on each tick().
+//!
+//! NOTE: This is NOT a concrete node type that can be created, it is only an interface!
 const StatefulAction = @This();
 
 node: Node,
@@ -12,10 +14,11 @@ pub const VTable = struct {
     onStarted: ?*const fn (action: *StatefulAction) Node.Status = null,
     /// Called when the node is transitioned to Idle
     onHalted: ?*const fn (action: *StatefulAction) void = null,
-    /// Deinitialize and free any resources
-    deinit: ?*const fn (action: *StatefulAction, alloc: Allocator) void = null,
+    /// Deinitialize the "derived" type, including destroying the instance
+    deinit: *const fn (action: *StatefulAction, alloc: Allocator) void,
 };
 
+/// Forward the tick to the correct method based on the current status of the node
 pub fn tick(node: *Node) Node.Status {
     const action: *StatefulAction = @alignCast(@fieldParentPtr("node", node));
 
@@ -41,7 +44,7 @@ pub fn halt(node: *Node) void {
 
 pub fn deinit(node: *Node, alloc: Allocator) void {
     const action: *StatefulAction = @alignCast(@fieldParentPtr("node", node));
-    if (action.vtable.deinit) |f| f(action, alloc);
+    action.vtable.deinit(action, alloc);
 }
 
 pub fn onStarted(action: *StatefulAction) Node.Status {
@@ -59,15 +62,18 @@ pub fn onHalted(action: *StatefulAction) void {
     }
 }
 
-pub fn init(alloc: Allocator, name: []const u8, vtable: VTable) !StatefulAction {
-    return .{
-        .vtable = vtable,
-        .node = try .init(alloc, name, .action, .{
-            .tick = tick,
-            .halt = halt,
-            .deinit = deinit,
-        }),
-    };
+pub fn init(self: *@This(), alloc: Allocator, name: []const u8, vtable: VTable) !void {
+    self.vtable = vtable;
+    self.node = try .init(alloc, name, .action, .{
+        .tick = tick,
+        .halt = halt,
+        .deinit = deinit,
+    });
+}
+
+pub fn cast(node: *Node, T: anytype) *T {
+    const action: *StatefulAction = @alignCast(@fieldParentPtr("node", node));
+    return @alignCast(@fieldParentPtr("action", action));
 }
 
 const Node = @import("../../Node.zig");

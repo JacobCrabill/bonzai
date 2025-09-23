@@ -6,27 +6,25 @@ pub fn tick(_: *Node) Node.Status {
     return .running;
 }
 
-pub fn init(alloc: Allocator, name: []const u8) !AlwaysRunning {
-    return .{
-        .node = try .init(alloc, name, .action, .{
-            .tick = tick,
-        }),
-    };
-}
-
-pub fn create(alloc: Allocator, name: []const u8) !*Node {
-    var node = try alloc.create(AlwaysRunning);
-    node.node = try .init(alloc, name, .action, .{
+/// Initialize a new node of this type
+pub fn init(self: *@This(), alloc: Allocator, name: []const u8) !void {
+    self.node = try .init(alloc, name, .action, .{
         .tick = tick,
         .deinit = deinit,
     });
+}
+
+/// Create an instance of this node type
+pub fn create(alloc: Allocator, name: []const u8) !*Node {
+    var node = try alloc.create(@This());
+    try node.init(alloc, name);
     return &node.node;
 }
 
 /// Destroy this node instance
 pub fn deinit(node: *Node, alloc: Allocator) void {
-    const run: *AlwaysRunning = @alignCast(@fieldParentPtr("node", node));
-    alloc.destroy(run);
+    const self: *@This() = @alignCast(@fieldParentPtr("node", node));
+    alloc.destroy(self);
 }
 
 const Node = @import("../../Node.zig");

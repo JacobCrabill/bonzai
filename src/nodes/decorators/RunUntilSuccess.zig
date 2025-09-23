@@ -17,12 +17,25 @@ pub fn tick(node: *Node) Node.Status {
     };
 }
 
-pub fn init(alloc: Allocator, name: []const u8) !RunUntilSuccess {
-    return .{
-        .node = try .init(alloc, name, .decorator, .{
-            .tick = tick,
-        }),
-    };
+/// Initialize a new node of this type
+pub fn init(self: *@This(), alloc: Allocator, name: []const u8) !void {
+    self.node = try .init(alloc, name, .decorator, .{
+        .tick = tick,
+        .deinit = deinit,
+    });
+}
+
+/// Create a new Sequence node, returning the base Node pointer
+pub fn create(alloc: Allocator, name: []const u8) anyerror!*Node {
+    var node = try alloc.create(@This());
+    try node.init(alloc, name);
+    return &node.node;
+}
+
+/// Deinitialize the node and free all resources
+pub fn deinit(node: *Node, alloc: Allocator) void {
+    const self: *@This() = @alignCast(@fieldParentPtr("node", node));
+    alloc.destroy(self);
 }
 
 const Node = @import("../../Node.zig");
@@ -41,50 +54,50 @@ test "[RunUntilSuccess] basics" {
 
     {
         const name = "running";
-        var inv = try RunUntilSuccess.init(alloc, name);
-        defer inv.node.deinit(alloc);
+        const run: *Node = try RunUntilSuccess.create(alloc, name);
+        defer run.deinit(alloc);
 
-        try std.testing.expectEqualStrings(inv.node.name, name);
+        try std.testing.expectEqualStrings(run.name, name);
 
-        var s1 = try AlwaysRunning.init(alloc, "running-1");
-        inv.node.data.decorator.child = &s1.node;
-        try std.testing.expectEqual(.running, inv.node.tick());
+        const s1 = try AlwaysRunning.create(alloc, "running-1");
+        run.data.decorator.child = s1;
+        try std.testing.expectEqual(.running, run.tick());
 
-        inv.node.halt();
-        try std.testing.expectEqual(.idle, inv.node.data.decorator.child.status);
+        run.halt();
+        try std.testing.expectEqual(.idle, run.data.decorator.child.status);
     }
 
     {
         const name = "failure";
-        var inv = try RunUntilSuccess.init(alloc, name);
-        defer inv.node.deinit(alloc);
+        var run = try RunUntilSuccess.create(alloc, name);
+        defer run.deinit(alloc);
 
-        try std.testing.expectEqualStrings(inv.node.name, name);
+        try std.testing.expectEqualStrings(run.name, name);
 
-        var s1 = try AlwaysFailure.init(alloc, "failure-1");
-        inv.node.data.decorator.child = &s1.node;
-        try std.testing.expectEqual(.running, inv.node.tick());
-        try std.testing.expectEqual(.running, inv.node.tick());
-        try std.testing.expectEqual(.running, inv.node.tick());
-        try std.testing.expectEqual(.running, inv.node.tick());
+        const s1 = try AlwaysFailure.create(alloc, "failure-1");
+        run.data.decorator.child = s1;
+        try std.testing.expectEqual(.running, run.tick());
+        try std.testing.expectEqual(.running, run.tick());
+        try std.testing.expectEqual(.running, run.tick());
+        try std.testing.expectEqual(.running, run.tick());
         // ...we could keep going here forever
 
-        inv.node.halt();
-        try std.testing.expectEqual(.idle, inv.node.data.decorator.child.status);
+        run.halt();
+        try std.testing.expectEqual(.idle, run.data.decorator.child.status);
     }
 
     {
         const name = "success";
-        var inv = try RunUntilSuccess.init(alloc, name);
-        defer inv.node.deinit(alloc);
+        const run = try RunUntilSuccess.create(alloc, name);
+        defer run.deinit(alloc);
 
-        try std.testing.expectEqualStrings(inv.node.name, name);
+        try std.testing.expectEqualStrings(run.name, name);
 
-        var s1 = try AlwaysSuccess.init(alloc, "success-1");
-        inv.node.data.decorator.child = &s1.node;
-        try std.testing.expectEqual(.success, inv.node.tick());
+        const s1 = try AlwaysSuccess.create(alloc, "success-1");
+        run.data.decorator.child = s1;
+        try std.testing.expectEqual(.success, run.tick());
 
-        inv.node.halt();
-        try std.testing.expectEqual(.idle, inv.node.data.decorator.child.status);
+        run.halt();
+        try std.testing.expectEqual(.idle, run.data.decorator.child.status);
     }
 }

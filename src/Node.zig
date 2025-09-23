@@ -66,7 +66,7 @@ pub const VTable = struct {
     halt: ?*const fn (node: *Node) void = null,
     /// Deinitialize the node, freeing any resources it may have, and also deallocating itself
     /// TODO: Split into optional "deinit" (called before anything gets freed) and a required "destroy" (called at the very end)
-    deinit: ?*const fn (node: *Node, alloc: Allocator) void = null,
+    deinit: *const fn (node: *Node, alloc: Allocator) void,
 };
 
 pub fn kind(node: *const Node) Kind {
@@ -141,7 +141,7 @@ pub fn deinit(node: *Node, alloc: Allocator) void {
         else => {},
     }
     alloc.free(node.name);
-    if (node.vtable.deinit) |d| d(node, alloc);
+    node.vtable.deinit(node, alloc);
 }
 
 const Control = @import("base_types/Control.zig");

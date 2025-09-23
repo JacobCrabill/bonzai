@@ -13,23 +13,42 @@ pub const base_types = struct {
 };
 
 pub const nodes = struct {
-    pub const Sequence = @import("nodes/controls/Sequence.zig");
-    pub const Fallback = @import("nodes/controls/Fallback.zig");
-    pub const StatefulAction = @import("nodes/actions/StatefulAction.zig");
-    pub const Inverter = @import("nodes/decorators/Inverter.zig");
-    pub const RunUntilSuccess = @import("nodes/decorators/RunUntilSuccess.zig");
+    pub const conditions = struct {
+        pub const AlwaysSuccess = @import("nodes/conditions/AlwaysSuccess.zig");
+        pub const AlwaysFailure = @import("nodes/conditions/AlwaysFailure.zig");
+    };
+
+    pub const actions = struct {
+        pub const StatefulAction = @import("nodes/actions/StatefulAction.zig");
+        pub const AlwaysRunning = @import("nodes/actions//AlwaysRunning.zig");
+    };
+
+    pub const decorators = struct {
+        pub const Inverter = @import("nodes/decorators/Inverter.zig");
+        pub const RunUntilSuccess = @import("nodes/decorators/RunUntilSuccess.zig");
+    };
+
+    pub const controls = struct {
+        pub const Sequence = @import("nodes/controls/Sequence.zig");
+        pub const Fallback = @import("nodes/controls/Fallback.zig");
+    };
 };
 
 pub const loggers = struct {
     pub const StdoutLogger = @import("loggers/StdoutLogger.zig");
 };
 
-test "All Bonzai Module Tests" {
-    _ = nodes.Sequence;
-    _ = nodes.Fallback;
-    _ = nodes.StatefulAction;
-    _ = nodes.Inverter;
-    _ = nodes.RunUntilSuccess;
+/// Registar all Node types built in to Bonzai
+pub fn registerBuiltinTypes(factory: *Factory) !void {
+    try factory.registerNode("Sequence", nodes.controls.Sequence.create);
+    try factory.registerNode("Fallback", nodes.controls.Fallback.create);
+    try factory.registerNode("Inverter", nodes.decorators.Inverter.create);
+    try factory.registerNode("RunUntilSuccess", nodes.decorators.RunUntilSuccess.create);
+    try factory.registerNode("AlwaysRunning", nodes.actions.AlwaysRunning.create);
+    try factory.registerNode("AlwaysSuccess", nodes.conditions.AlwaysSuccess.create);
+    try factory.registerNode("AlwaysFailure", nodes.conditions.AlwaysFailure.create);
+}
 
+test "All Bonzai Module Tests" {
     std.testing.refAllDecls(@This());
 }

@@ -11,14 +11,19 @@ pub fn init(alloc: Allocator) Tree {
     };
 }
 
-pub fn deinit(tree: *Tree, alloc: Allocator) void {
-    if (tree.root) |*root| root.*.deinit(alloc);
-    tree.nodes.deinit(alloc);
-    tree.loggers.deinit(alloc);
+pub fn deinit(tree: *Tree) void {
+    if (tree.root) |*root| root.*.deinit(tree.allocator);
+    tree.nodes.deinit(tree.allocator);
+    tree.loggers.deinit(tree.allocator);
 }
 
+/// Tick the root of the tree
 pub fn tick(tree: *Tree) Node.Status {
     return if (tree.root) |root| root.tick() else .failure;
+}
+
+pub fn addNode(tree: *Tree, node: *Node) !void {
+    try tree.nodes.append(tree.allocator, node);
 }
 
 /// Add the given logger as a Status Change callback to all Nodes in the Tree
@@ -82,7 +87,7 @@ test "[Tree] Add Logger, No Nodes" {
     const alloc = std.testing.allocator;
 
     var tree = Tree.init(alloc);
-    defer tree.deinit(alloc);
+    defer tree.deinit();
 
     var logger = @import("loggers/StdoutLogger.zig").init();
     try tree.addLogger(alloc, &logger.logger);

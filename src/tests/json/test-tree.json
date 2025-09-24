@@ -1,16 +1,20 @@
 {
-  "nodes": [
-    {
-      "kind": "Sequence",
-      "name": "root",
-      "data": {
-        "children": [
-          {
-            "kind": "AlwaysSuccess",
-            "name": "success!"
-          }
-        ]
+  "root": {
+    "kind": "Sequence",
+    "name": "root",
+    "children": [
+      {
+        "kind": "Inverter",
+        "name": "inverter-1",
+        "child": {
+          "kind": "AlwaysFailure",
+          "name": "!failure"
+        }
+      },
+      {
+        "kind": "AlwaysSuccess",
+        "name": "success!"
       }
-    }
-  ]
+    ]
+  }
 }

@@ -68,7 +68,7 @@ test "Parse from JSON File" {
     try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, writer);
 
     // Examle of traversing the tree
-    const nodelist = value.object.get("nodes").?;
-    const root_kind = nodelist.array.items[0].object.get("kind").?.string;
+    const root = value.object.get("root").?;
+    const root_kind = root.object.get("kind").?.string;
     try std.testing.expectEqualStrings("Sequence", root_kind);
 }

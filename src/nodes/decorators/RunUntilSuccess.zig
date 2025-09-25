@@ -18,27 +18,29 @@ pub fn tick(node: *Node) Node.Status {
 }
 
 /// Initialize a new node of this type
-pub fn init(self: *@This(), alloc: Allocator, name: []const u8) !void {
-    self.node = try .init(alloc, name, .decorator, .{
+pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8) !void {
+    self.node = try .init(alloc, ctx, name, .decorator, .{
         .tick = tick,
         .deinit = deinit,
     });
 }
 
-/// Create a new Sequence node, returning the base Node pointer
-pub fn create(alloc: Allocator, name: []const u8) anyerror!*Node {
+/// Create an instance of this node type
+pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node {
     var node = try alloc.create(@This());
-    try node.init(alloc, name);
+    try node.init(alloc, ctx, name);
     return &node.node;
 }
 
 /// Deinitialize the node and free all resources
 pub fn deinit(node: *Node, alloc: Allocator) void {
-    const self: *@This() = @alignCast(@fieldParentPtr("node", node));
+    const self = node.cast(@This());
     alloc.destroy(self);
 }
 
 const Node = @import("../../Node.zig");
+const Context = @import("../../Context.zig");
+
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
@@ -52,14 +54,17 @@ test "[RunUntilSuccess] basics" {
     const AlwaysSuccess = @import("../conditions/AlwaysSuccess.zig");
     const AlwaysFailure = @import("../conditions/AlwaysFailure.zig");
 
+    var ctx = try Context.create(alloc, null);
+    defer ctx.deinit();
+
     {
         const name = "running";
-        const run: *Node = try RunUntilSuccess.create(alloc, name);
+        const run: *Node = try RunUntilSuccess.create(alloc, ctx, name);
         defer run.deinit(alloc);
 
         try std.testing.expectEqualStrings(run.name, name);
 
-        const s1 = try AlwaysRunning.create(alloc, "running-1");
+        const s1 = try AlwaysRunning.create(alloc, ctx, "running-1");
         run.data.decorator.child = s1;
         try std.testing.expectEqual(.running, run.tick());
 
@@ -69,12 +74,12 @@ test "[RunUntilSuccess] basics" {
 
     {
         const name = "failure";
-        var run = try RunUntilSuccess.create(alloc, name);
+        var run = try RunUntilSuccess.create(alloc, ctx, name);
         defer run.deinit(alloc);
 
         try std.testing.expectEqualStrings(run.name, name);
 
-        const s1 = try AlwaysFailure.create(alloc, "failure-1");
+        const s1 = try AlwaysFailure.create(alloc, ctx, "failure-1");
         run.data.decorator.child = s1;
         try std.testing.expectEqual(.running, run.tick());
         try std.testing.expectEqual(.running, run.tick());
@@ -88,12 +93,12 @@ test "[RunUntilSuccess] basics" {
 
     {
         const name = "success";
-        const run = try RunUntilSuccess.create(alloc, name);
+        const run = try RunUntilSuccess.create(alloc, ctx, name);
         defer run.deinit(alloc);
 
         try std.testing.expectEqualStrings(run.name, name);
 
-        const s1 = try AlwaysSuccess.create(alloc, "success-1");
+        const s1 = try AlwaysSuccess.create(alloc, ctx, "success-1");
         run.data.decorator.child = s1;
         try std.testing.expectEqual(.success, run.tick());
 

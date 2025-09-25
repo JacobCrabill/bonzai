@@ -41,6 +41,8 @@ status: Status = .idle,
 /// The data implementing the high-level node subtype
 data: Data,
 
+context: *Context,
+
 /// The vtable implementing the Node subtype
 vtable: VTable,
 
@@ -116,7 +118,7 @@ pub fn halt(node: *Node) void {
 }
 
 /// Create a new Node. Copies the given name string.
-pub fn init(alloc: Allocator, name: []const u8, node_kind: Kind, vtable: VTable) !Node {
+pub fn init(alloc: Allocator, ctx: *Context, name: []const u8, node_kind: Kind, vtable: VTable) !Node {
     return .{
         .data = switch (node_kind) {
             .action => .{ .action = {} },
@@ -124,6 +126,7 @@ pub fn init(alloc: Allocator, name: []const u8, node_kind: Kind, vtable: VTable)
             .decorator => .{ .decorator = .{} },
             .control => .{ .control = .{} },
         },
+        .context = ctx,
         .vtable = vtable,
         .name = try alloc.dupe(u8, name),
     };
@@ -144,6 +147,13 @@ pub fn deinit(node: *Node, alloc: Allocator) void {
     node.vtable.deinit(node, alloc);
 }
 
+/// Cast a Node pointer to its "derived" type.
+/// Assumes the derived type follows the convention of storing the Node as a field named 'node'.
+pub fn cast(node: *Node, T: anytype) *T {
+    return @alignCast(@fieldParentPtr("node", node));
+}
+
+const Context = @import("Context.zig");
 const Control = @import("base_types/Control.zig");
 const Decorator = @import("base_types/Decorator.zig");
 

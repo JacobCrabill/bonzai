@@ -4,7 +4,7 @@ pub const Factory = @This();
 /// pointer to the "base-class" Node field within it.
 /// TODO: Create error union for the 'create' method.
 /// TODO: Take in a Context type.
-const BuilderFn = *const fn (alloc: std.mem.Allocator, name: []const u8) anyerror!*Node;
+const BuilderFn = *const fn (alloc: std.mem.Allocator, ctx: *Context, name: []const u8) anyerror!*Node;
 
 /// We store our own Allocator to ensure all nodes get created & destroyed with the same one
 gpa: Allocator,
@@ -31,15 +31,15 @@ pub fn registerNode(factory: *Factory, typename: []const u8, func: BuilderFn) !v
 
 /// Create a new Node of the given type.
 /// TODO: Take in a Context struct.
-pub fn createNode(factory: *const Factory, kind: []const u8, name: []const u8) !*Node {
+pub fn createNode(factory: *const Factory, ctx: *Context, kind: []const u8, name: []const u8) !*Node {
     if (factory.registry.get(kind)) |func| {
-        return try func(factory.gpa, name);
+        return try func(factory.gpa, ctx, name);
     }
     return error.UnknownNodeType;
 }
 
 /// Load and instantiate a Behavior Tree from a JSON string
-pub fn loadFromJson(factory: *Factory, json: []const u8) !Tree {
+pub fn loadFromJson(factory: *Factory, ctx: *Context, json: []const u8) !Tree {
     var arena = std.heap.ArenaAllocator.init(factory.gpa);
     defer arena.deinit();
 
@@ -50,7 +50,7 @@ pub fn loadFromJson(factory: *Factory, json: []const u8) !Tree {
     const root_def = value.object.get("root").?.object;
 
     // TODO: separate allocator for the tree? idk
-    var tree = Tree.init(factory.gpa);
+    var tree = Tree.init(factory.gpa, ctx);
     try factory.parseJsonValue(&tree, null, .{ .object = root_def });
     return tree;
 }
@@ -64,7 +64,7 @@ fn parseJsonValue(factory: *Factory, tree: *Tree, parent: ?*Node, value: std.jso
     //  Instantiate the node
     const kind = value.object.get("kind").?.string;
     const name = value.object.get("name").?.string;
-    const node = try factory.createNode(kind, name);
+    const node = try factory.createNode(tree.context, kind, name);
 
     // Add the node to its parent
     // TODO: think about the order of allocations for efficiency
@@ -137,14 +137,22 @@ fn isControl(value: std.json.Value) bool {
 }
 
 const Node = @import("Node.zig");
+const Context = @import("Context.zig");
 const Tree = @import("Tree.zig");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+
+////////////////////////////////////////////////////////////////////////////////
+// Unit Tests
+////////////////////////////////////////////////////////////////////////////////
 
 test "[Factory] Register & Create Nodes" {
     const gpa = std.testing.allocator;
     var factory = try Factory.init(gpa);
     defer factory.deinit();
+
+    var ctx = try Context.create(gpa, null);
+    defer ctx.deinit();
 
     const Sequence = @import("nodes/controls/Sequence.zig");
     const AlwaysRunning = @import("nodes/actions/AlwaysRunning.zig");
@@ -152,8 +160,8 @@ test "[Factory] Register & Create Nodes" {
     try factory.registerNode("Sequence", Sequence.create);
     try factory.registerNode("AlwaysRunning", AlwaysRunning.create);
 
-    const seq_node: *Node = try factory.createNode("Sequence", "seq-1");
-    const ar_node: *Node = try factory.createNode("AlwaysRunning", "run-1");
+    const seq_node: *Node = try factory.createNode(ctx, "Sequence", "seq-1");
+    const ar_node: *Node = try factory.createNode(ctx, "AlwaysRunning", "run-1");
     defer seq_node.deinit(gpa);
     defer ar_node.deinit(gpa);
 }
@@ -162,6 +170,9 @@ test "[Factory] Load from JSON" {
     const gpa = std.testing.allocator;
     var factory = try Factory.init(gpa);
     defer factory.deinit();
+
+    var ctx = try Context.create(gpa, null);
+    defer ctx.deinit();
 
     const Sequence = @import("nodes/controls/Sequence.zig");
     const Inverter = @import("nodes/decorators/Inverter.zig");
@@ -175,7 +186,7 @@ test "[Factory] Load from JSON" {
 
     const json = @embedFile("tests/json/test-tree.json");
 
-    var tree = try factory.loadFromJson(json);
+    var tree = try factory.loadFromJson(ctx, json);
     defer tree.deinit();
 
     try std.testing.expectEqual(.running, tree.tick());

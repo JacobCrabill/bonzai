@@ -49,6 +49,10 @@ pub fn registerBuiltinTypes(factory: *Factory) !void {
     try factory.registerNode("AlwaysFailure", nodes.conditions.AlwaysFailure.create);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Unit Tests
+////////////////////////////////////////////////////////////////////////////////
+
 test "All Bonzai Module Tests" {
     std.testing.refAllDecls(@This());
 }

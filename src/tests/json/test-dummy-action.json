@@ -1,0 +1,12 @@
+{
+  "root": {
+    "kind": "Sequence",
+    "name": "root",
+    "children": [
+      {
+        "kind": "DummyAction",
+        "name": "do-stuff"
+      }
+    ]
+  }
+}

@@ -62,9 +62,9 @@ pub fn onHalted(action: *StatefulAction) void {
     }
 }
 
-pub fn init(self: *@This(), alloc: Allocator, name: []const u8, vtable: VTable) !void {
+pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8, vtable: VTable) !void {
     self.vtable = vtable;
-    self.node = try .init(alloc, name, .action, .{
+    self.node = try .init(alloc, ctx, name, .action, .{
         .tick = tick,
         .halt = halt,
         .deinit = deinit,
@@ -72,10 +72,12 @@ pub fn init(self: *@This(), alloc: Allocator, name: []const u8, vtable: VTable) 
 }
 
 pub fn cast(node: *Node, T: anytype) *T {
-    const action: *StatefulAction = @alignCast(@fieldParentPtr("node", node));
+    const action = node.cast(StatefulAction);
     return @alignCast(@fieldParentPtr("action", action));
 }
 
 const Node = @import("../../Node.zig");
+const Context = @import("../../Context.zig");
+
 const std = @import("std");
 const Allocator = std.mem.Allocator;

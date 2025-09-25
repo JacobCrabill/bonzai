@@ -37,9 +37,9 @@ pub fn halt(node: *Node) void {
 }
 
 /// Initialize a new Sequence node.
-pub fn init(self: *@This(), alloc: Allocator, name: []const u8) !void {
+pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8) !void {
     self.current_child = 0;
-    self.node = try .init(alloc, name, .control, .{
+    self.node = try .init(alloc, ctx, name, .control, .{
         .tick = tick,
         .halt = halt,
         .deinit = deinit,
@@ -47,9 +47,9 @@ pub fn init(self: *@This(), alloc: Allocator, name: []const u8) !void {
 }
 
 /// Create a new Sequence node, returning the base Node pointer
-pub fn create(alloc: Allocator, name: []const u8) anyerror!*Node {
-    var node = try alloc.create(Sequence);
-    try node.init(alloc, name);
+pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node {
+    var node = try alloc.create(@This());
+    try node.init(alloc, ctx, name);
     return &node.node;
 }
 
@@ -60,7 +60,7 @@ pub fn deinit(node: *Node, alloc: Allocator) void {
 }
 
 const Node = @import("../../Node.zig");
-const Control = @import("../../base_types/Control.zig");
+const Context = @import("../../Context.zig");
 
 const std = @import("std");
 const ArrayList = std.ArrayList;
@@ -75,16 +75,19 @@ test "[Sequence] run to failure" {
     const AlwaysSuccess = @import("../conditions/AlwaysSuccess.zig");
     const AlwaysFailure = @import("../conditions/AlwaysFailure.zig");
 
+    var ctx = try Context.create(alloc, null);
+    defer ctx.deinit();
+
     const name = "run-to-failure";
-    const seq: *Node = try Sequence.create(alloc, name);
+    const seq: *Node = try Sequence.create(alloc, ctx, name);
     defer seq.deinit(alloc);
 
     try std.testing.expectEqualStrings(seq.name, name);
 
     // Create a few child nodes to add to the Sequence
-    const s1 = try AlwaysSuccess.create(alloc, "success-1");
-    const s2 = try AlwaysSuccess.create(alloc, "success-2");
-    const f1 = try AlwaysFailure.create(alloc, "failure-1");
+    const s1 = try AlwaysSuccess.create(alloc, ctx, "success-1");
+    const s2 = try AlwaysSuccess.create(alloc, ctx, "success-2");
+    const f1 = try AlwaysFailure.create(alloc, ctx, "failure-1");
 
     try seq.data.control.addChild(alloc, s1);
     try seq.data.control.addChild(alloc, s2);
@@ -100,16 +103,19 @@ test "[Sequence] run to success" {
     const alloc = std.testing.allocator;
     const AlwaysSuccess = @import("../conditions/AlwaysSuccess.zig");
 
+    var ctx = try Context.create(alloc, null);
+    defer ctx.deinit();
+
     const name = "run-to-success";
-    const seq: *Node = try Sequence.create(alloc, name);
+    const seq: *Node = try Sequence.create(alloc, ctx, name);
     defer seq.deinit(alloc);
 
     try std.testing.expectEqualStrings(seq.name, name);
 
     // Create a few child nodes to add to the Sequence
-    const s1 = try AlwaysSuccess.create(alloc, "success-1");
-    const s2 = try AlwaysSuccess.create(alloc, "success-2");
-    const s3 = try AlwaysSuccess.create(alloc, "success-3");
+    const s1 = try AlwaysSuccess.create(alloc, ctx, "success-1");
+    const s2 = try AlwaysSuccess.create(alloc, ctx, "success-2");
+    const s3 = try AlwaysSuccess.create(alloc, ctx, "success-3");
 
     try seq.data.control.addChild(alloc, s1);
     try seq.data.control.addChild(alloc, s2);

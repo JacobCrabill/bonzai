@@ -2,12 +2,18 @@ pub const Tree = @This();
 
 allocator: Allocator,
 root: ?*Node = null,
+context: *Context,
+blackboard: Blackboard,
 nodes: ArrayList(*Node) = .empty,
 loggers: ArrayList(*Logger) = .empty,
 
-pub fn init(alloc: Allocator) Tree {
+/// Initialize the tree, providing an allocator and a global Context.
+/// The Tree does not take ownership of the Context struct.
+pub fn init(alloc: Allocator, ctx: *Context) Tree {
     return .{
         .allocator = alloc,
+        .context = ctx,
+        .blackboard = Blackboard.init(alloc),
     };
 }
 
@@ -15,6 +21,7 @@ pub fn deinit(tree: *Tree) void {
     if (tree.root) |*root| root.*.deinit(tree.allocator);
     tree.nodes.deinit(tree.allocator);
     tree.loggers.deinit(tree.allocator);
+    tree.blackboard.deinit();
 }
 
 /// Tick the root of the tree
@@ -76,17 +83,28 @@ fn applyRecursiveVisitor(node: *Node, ctx: anytype, visitor: *const fn (anytype,
 }
 
 const Node = @import("Node.zig");
+const Context = @import("Context.zig");
 const Logger = @import("Logger.zig");
 const Control = @import("base_types/Control.zig");
+
+const Blackboard = @import("blackboard.zig").Blackboard;
+const BlackboardValue = @import("blackboard.zig").Value;
 
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
+////////////////////////////////////////////////////////////////////////////////
+// Unit Tests
+////////////////////////////////////////////////////////////////////////////////
+
 test "[Tree] Add Logger, No Nodes" {
     const alloc = std.testing.allocator;
 
-    var tree = Tree.init(alloc);
+    var ctx = try Context.create(alloc, null);
+    defer ctx.deinit();
+
+    var tree = Tree.init(alloc, ctx);
     defer tree.deinit();
 
     var logger = @import("loggers/StdoutLogger.zig").init();

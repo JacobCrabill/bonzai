@@ -16,5 +16,8 @@
         "name": "success!"
       }
     ]
+  },
+  "params": {
+    "some-global-value": "Hello, Bonzai!"
   }
 }

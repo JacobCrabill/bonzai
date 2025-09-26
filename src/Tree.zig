@@ -21,6 +21,14 @@ pub fn deinit(tree: *Tree) void {
     if (tree.root) |*root| root.*.deinit(tree.allocator);
     tree.nodes.deinit(tree.allocator);
     tree.loggers.deinit(tree.allocator);
+    var iter = tree.blackboard.iterator();
+    while (iter.next()) |elem| {
+        switch (elem.value_ptr.*) {
+            .string => |s| tree.allocator.free(s),
+            else => {},
+        }
+        tree.allocator.free(elem.key_ptr.*);
+    }
     tree.blackboard.deinit();
 }
 

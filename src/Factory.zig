@@ -51,6 +51,46 @@ pub fn loadFromJson(factory: *Factory, ctx: *Context, json: []const u8) !Tree {
 
     // TODO: separate allocator for the tree? idk
     var tree = Tree.init(factory.gpa, ctx);
+
+    // Check for any tree-level parameters for its global Blackboard
+    if (value.object.get("params")) |params| {
+        if (params == .object) {
+            var iter = params.object.iterator();
+            while (iter.next()) |elem| {
+                const key = elem.key_ptr;
+                switch (elem.value_ptr.*) {
+                    .string => |s| {
+                        try tree.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .string = try tree.allocator.dupe(u8, s) },
+                        );
+                    },
+                    .bool => |b| {
+                        try tree.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .bool = b },
+                        );
+                    },
+                    .integer => |b| {
+                        try tree.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .int = b },
+                        );
+                    },
+                    .float => |b| {
+                        try tree.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .float = b },
+                        );
+                    },
+                    else => {
+                        std.debug.print("Warning: Ignoring invalid paramter type; key: {s}\n", .{key.*});
+                    },
+                }
+            }
+        }
+    }
+
     try factory.parseJsonValue(&tree, null, .{ .object = root_def });
     return tree;
 }
@@ -227,6 +267,8 @@ test "[Factory] Load from JSON" {
 
     var tree = try factory.loadFromJson(ctx, json);
     defer tree.deinit();
+
+    try std.testing.expectEqualStrings(tree.blackboard.get("some-global-value").?.string, "Hello, Bonzai!");
 
     try std.testing.expectEqual(.running, tree.tick());
     try std.testing.expectEqual(.success, tree.tick());

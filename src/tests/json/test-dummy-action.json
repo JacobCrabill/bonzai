@@ -5,7 +5,13 @@
     "children": [
       {
         "kind": "DummyAction",
-        "name": "do-stuff"
+        "name": "do-stuff",
+        "params": {
+          "max_ticks": 3,
+          "some_value": 1.234,
+          "hello": "world",
+          "ok": true
+        }
       }
     ]
   }

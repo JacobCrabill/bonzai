@@ -66,6 +66,45 @@ fn parseJsonValue(factory: *Factory, tree: *Tree, parent: ?*Node, value: std.jso
     const name = value.object.get("name").?.string;
     const node = try factory.createNode(tree.context, kind, name);
 
+    // Check for any params to store in the private Blackboard
+    if (value.object.get("params")) |params| {
+        if (params == .object) {
+            var iter = params.object.iterator();
+            while (iter.next()) |elem| {
+                const key = elem.key_ptr;
+                switch (elem.value_ptr.*) {
+                    .string => |s| {
+                        try node.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .string = try tree.allocator.dupe(u8, s) },
+                        );
+                    },
+                    .bool => |b| {
+                        try node.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .bool = b },
+                        );
+                    },
+                    .integer => |b| {
+                        try node.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .int = b },
+                        );
+                    },
+                    .float => |b| {
+                        try node.blackboard.put(
+                            try tree.allocator.dupe(u8, key.*),
+                            .{ .float = b },
+                        );
+                    },
+                    else => {
+                        std.debug.print("Warning: Ignoring invalid paramter type; key: {s}\n", .{key.*});
+                    },
+                }
+            }
+        }
+    }
+
     // Add the node to its parent
     // TODO: think about the order of allocations for efficiency
     if (parent) |pnode| {

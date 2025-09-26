@@ -21,6 +21,17 @@ pub fn onStarted(action: *StatefulAction) Node.Status {
         std.debug.print("{s}\n", .{ctx.some_other_data});
     }
 
+    std.debug.print("Private blackboard values:\n", .{});
+    var iter = action.node.blackboard.iterator();
+    while (iter.next()) |elem| {
+        const key = elem.key_ptr.*;
+        switch (elem.value_ptr.*) {
+            .string => |s| std.debug.print("  {s}: {s}\n", .{ key, s }),
+            .float => |f| std.debug.print("  {s}: {d}\n", .{ key, f }),
+            .int => |i| std.debug.print("  {s}: {d}\n", .{ key, i }),
+            .bool => |b| std.debug.print("  {s}: {any}\n", .{ key, b }),
+        }
+    }
     return .running;
 }
 

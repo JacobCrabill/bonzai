@@ -41,7 +41,11 @@ status: Status = .idle,
 /// The data implementing the high-level node subtype
 data: Data,
 
+/// Context from the parent tree
 context: *Context,
+
+/// Blackboard (key/value map) for this node
+blackboard: Blackboard,
 
 /// The vtable implementing the Node subtype
 vtable: VTable,
@@ -127,6 +131,7 @@ pub fn init(alloc: Allocator, ctx: *Context, name: []const u8, node_kind: Kind, 
             .control => .{ .control = .{} },
         },
         .context = ctx,
+        .blackboard = Blackboard.init(alloc),
         .vtable = vtable,
         .name = try alloc.dupe(u8, name),
     };
@@ -144,7 +149,21 @@ pub fn deinit(node: *Node, alloc: Allocator) void {
         else => {},
     }
     alloc.free(node.name);
+    var iter = node.blackboard.iterator();
+    while (iter.next()) |elem| {
+        switch (elem.value_ptr.*) {
+            .string => |s| alloc.free(s),
+            else => {},
+        }
+        alloc.free(elem.key_ptr.*);
+    }
+    node.blackboard.deinit();
     node.vtable.deinit(node, alloc);
+}
+
+/// Get a value from the Node's Blackboard
+pub fn getValue(node: *const Node, key: []const u8) ?BlackboardValue {
+    return node.blackboard.get(key);
 }
 
 /// Cast a Node pointer to its "derived" type.
@@ -156,6 +175,8 @@ pub fn cast(node: *Node, T: anytype) *T {
 const Context = @import("Context.zig");
 const Control = @import("base_types/Control.zig");
 const Decorator = @import("base_types/Decorator.zig");
+const Blackboard = @import("blackboard.zig").Blackboard;
+const BlackboardValue = @import("blackboard.zig").Value;
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

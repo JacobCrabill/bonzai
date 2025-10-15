@@ -1,4 +1,4 @@
-//! TODO: I don't think this type is useful.
+//! A Decorator is a high-level node type which has a single child node.
 const Decorator = @This();
 
 child: *Node = undefined,

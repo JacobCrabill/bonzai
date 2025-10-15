@@ -1,3 +1,4 @@
+//! A Control is a high-level node type which has at least one child node.
 const Control = @This();
 
 children: std.ArrayList(*Node) = .empty,

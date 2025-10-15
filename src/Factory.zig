@@ -3,7 +3,6 @@ pub const Factory = @This();
 /// A BuilderFn creates a specific Node type with the given name and returns a
 /// pointer to the "base-class" Node field within it.
 /// TODO: Create error union for the 'create' method.
-/// TODO: Take in a Context type.
 const BuilderFn = *const fn (alloc: std.mem.Allocator, ctx: *Context, name: []const u8) anyerror!*Node;
 
 /// We store our own Allocator to ensure all nodes get created & destroyed with the same one
@@ -30,7 +29,6 @@ pub fn registerNode(factory: *Factory, typename: []const u8, func: BuilderFn) !v
 }
 
 /// Create a new Node of the given type.
-/// TODO: Take in a Context struct.
 pub fn createNode(factory: *const Factory, ctx: *Context, kind: []const u8, name: []const u8) !*Node {
     if (factory.registry.get(kind)) |func| {
         return try func(factory.gpa, ctx, name);

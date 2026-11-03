@@ -5,6 +5,8 @@ pub const Factory = @This();
 /// TODO: Create error union for the 'create' method.
 const BuilderFn = *const fn (alloc: std.mem.Allocator, ctx: *Context, name: []const u8) anyerror!*Node;
 
+io: std.Io,
+
 /// We store our own Allocator to ensure all nodes get created & destroyed with the same one
 gpa: Allocator,
 
@@ -12,8 +14,9 @@ gpa: Allocator,
 registry: std.StringArrayHashMapUnmanaged(BuilderFn),
 
 /// Initialize a Factory. It will not contain any types yet.
-pub fn init(alloc: Allocator) !Factory {
+pub fn init(io: std.Io, alloc: Allocator) !Factory {
     return .{
+        .io = io,
         .gpa = alloc,
         .registry = try std.StringArrayHashMapUnmanaged(BuilderFn).init(alloc, &.{}, &.{}),
     };
@@ -48,7 +51,7 @@ pub fn loadFromJson(factory: *Factory, ctx: *Context, json: []const u8) !Tree {
     const root_def = value.object.get("root").?.object;
 
     // TODO: separate allocator for the tree? idk
-    var tree = Tree.init(factory.gpa, ctx);
+    var tree = Tree.init(factory.io, factory.gpa, ctx);
 
     // Check for any tree-level parameters for its global Blackboard
     if (value.object.get("params")) |params| {
@@ -152,7 +155,7 @@ fn parseJsonValue(factory: *Factory, tree: *Tree, parent: ?*Node, value: std.jso
             },
             .decorator => |*d| d.child = node,
             else => {
-                var stdout = std.fs.File.stderr().writer(&.{});
+                var stdout = std.Io.File.stderr().writer(factory.io, &.{});
                 try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &stdout.interface);
                 // error! actions and condition nodes can't be parents
                 return error.InvalidParentType;
@@ -225,7 +228,7 @@ const Allocator = std.mem.Allocator;
 
 test "[Factory] Register & Create Nodes" {
     const gpa = std.testing.allocator;
-    var factory = try Factory.init(gpa);
+    var factory = try Factory.init(std.testing.io, gpa);
     defer factory.deinit();
 
     var ctx = try Context.create(gpa, null);
@@ -245,7 +248,7 @@ test "[Factory] Register & Create Nodes" {
 
 test "[Factory] Load from JSON" {
     const gpa = std.testing.allocator;
-    var factory = try Factory.init(gpa);
+    var factory = try Factory.init(std.testing.io, gpa);
     defer factory.deinit();
 
     var ctx = try Context.create(gpa, null);

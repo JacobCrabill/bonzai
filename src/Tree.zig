@@ -1,5 +1,6 @@
 pub const Tree = @This();
 
+io: std.Io,
 allocator: Allocator,
 root: ?*Node = null,
 context: *Context,
@@ -9,8 +10,9 @@ loggers: ArrayList(*Logger) = .empty,
 
 /// Initialize the tree, providing an allocator and a global Context.
 /// The Tree does not take ownership of the Context struct.
-pub fn init(alloc: Allocator, ctx: *Context) Tree {
+pub fn init(io: std.Io, alloc: Allocator, ctx: *Context) Tree {
     return .{
+        .io = io,
         .allocator = alloc,
         .context = ctx,
         .blackboard = Blackboard.init(alloc),
@@ -51,7 +53,7 @@ pub fn addLogger(tree: *Tree, alloc: Allocator, logger: *Logger) !void {
     };
 
     if (tree.root) |root| {
-        applyRecursiveVisitor(root, visitor, LoggerVisitor.visit);
+        applyRecursiveVisitor(root, LoggerVisitor, visitor, LoggerVisitor.visit);
     }
 }
 
@@ -61,8 +63,8 @@ const LoggerVisitor = struct {
     alloc: Allocator,
     logger: *Logger,
 
-    pub fn visit(ctx: anytype, node: *Node) void {
-        const visitor: LoggerVisitor = @as(LoggerVisitor, ctx);
+    pub fn visit(visitor: LoggerVisitor, node: *Node) void {
+        // const visitor: LoggerVisitor = @as(LoggerVisitor, ctx);
         node.status_changed_cbs.append(visitor.alloc, .{
             .ctx = visitor.logger,
             .callback = Logger.callback,
@@ -72,17 +74,15 @@ const LoggerVisitor = struct {
 
 /// Recursively applies the function defined via 'ctx' and 'visitor' to the node.
 /// The visitor is applied depth-first to any and all child nodes.
-fn applyRecursiveVisitor(node: *Node, ctx: anytype, visitor: *const fn (anytype, *Node) void) void {
+fn applyRecursiveVisitor(node: *Node, comptime T: type, ctx: T, visitor: *const fn (T, *Node) void) void {
     switch (node.data) {
         .control => |control| {
             for (control.children.items) |child| {
-                applyRecursiveVisitor(child, ctx, visitor);
-                visitor(ctx, child);
+                applyRecursiveVisitor(child, T, ctx, visitor);
             }
         },
         .decorator => |d| {
-            applyRecursiveVisitor(d.child, ctx, visitor);
-            visitor(ctx, d.child);
+            applyRecursiveVisitor(d.child, T, ctx, visitor);
         },
         else => {},
     }
@@ -107,16 +107,17 @@ const Allocator = std.mem.Allocator;
 ////////////////////////////////////////////////////////////////////////////////
 
 test "[Tree] Add Logger, No Nodes" {
+    const io = std.testing.io;
     const alloc = std.testing.allocator;
 
     var ctx = try Context.create(alloc, null);
     defer ctx.deinit();
 
-    var tree = Tree.init(alloc, ctx);
+    var tree = Tree.init(io, alloc, ctx);
     defer tree.deinit();
 
-    var logger = @import("loggers/StdoutLogger.zig").init();
-    try tree.addLogger(alloc, &logger.logger);
+    var logger: @import("loggers/StdoutLogger.zig") = .init(io);
+    try tree.addLogger(alloc, logger.interface());
 
     try std.testing.expectEqual(.failure, tree.tick());
 }

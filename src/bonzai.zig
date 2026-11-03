@@ -67,7 +67,7 @@ test "Parse from JSON File" {
 
     const value = try std.json.parseFromSliceLeaky(std.json.Value, arena, str, .{});
 
-    var stdout = std.fs.File.stdout().writer(&.{});
+    var stdout = std.Io.File.stdout().writer(std.testing.io, &.{});
     const writer = &stdout.interface;
     try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, writer);
 

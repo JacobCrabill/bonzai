@@ -177,6 +177,7 @@ const Control = @import("base_types/Control.zig");
 const Decorator = @import("base_types/Decorator.zig");
 const Blackboard = @import("blackboard.zig").Blackboard;
 const BlackboardValue = @import("blackboard.zig").Value;
+const Logger = @import("Logger.zig");
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

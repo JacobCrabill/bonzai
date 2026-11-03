@@ -8,8 +8,9 @@ const bonzai = @import("bonzai");
 const DummyAction = @import("DummyAction.zig");
 const CustomContext = @import("CustomContext.zig");
 
-test "[Tree] Tick tree with lgoger" {
+test "[Tree] Tick tree with logger" {
     const alloc = std.testing.allocator;
+    const io = std.testing.io;
 
     // Create the global Context struct with custom data
     var custom_context = CustomContext{
@@ -20,7 +21,7 @@ test "[Tree] Tick tree with lgoger" {
     defer ctx.deinit();
 
     // Initialize the Factory
-    var factory = try bonzai.Factory.init(alloc);
+    var factory = try bonzai.Factory.init(io, alloc);
     defer factory.deinit();
 
     try bonzai.registerBuiltinTypes(&factory);
@@ -31,8 +32,8 @@ test "[Tree] Tick tree with lgoger" {
     var tree = try factory.loadFromJson(ctx, json);
     defer tree.deinit();
 
-    var logger = bonzai.loggers.StdoutLogger.init();
-    try tree.addLogger(alloc, &logger.logger);
+    var logger: bonzai.loggers.StdoutLogger = .init(io);
+    try tree.addLogger(alloc, logger.interface());
 
     for (1..custom_context.num_ticks) |_| {
         try std.testing.expectEqual(.running, tree.tick());

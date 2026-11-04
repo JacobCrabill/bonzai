@@ -34,15 +34,7 @@ pub fn createWithData(alloc: std.mem.Allocator, data: ?*anyopaque) !*Context {
 /// Does not deinit the `data` field. If you need to handle custom cleanup on your `data`
 /// object, use `deinitWithData()`.
 pub fn deinit(self: *Context) void {
-    var iter = self.blackboard.iterator();
-    while (iter.next()) |elem| {
-        switch (elem.value_ptr.*) {
-            .string => |s| self.gpa.free(s),
-            else => {},
-        }
-        self.gpa.free(elem.key_ptr.*);
-    }
-    self.blackboard.deinit();
+    bb.deinit(&self.blackboard);
     self.gpa.destroy(self);
 }
 
@@ -85,24 +77,10 @@ pub fn getBlackboardValue(self: *const Context, key: []const u8) ?Value {
     return self.blackboard.get(key);
 }
 
-/// Put a value into the blackboard.
-/// Takes ownership of all string values, and automatically frees them
-/// when they go out of scope.
+/// Put a value into the blackboard, replacing any existing value.
+/// The key and any string value are copied; the caller retains ownership of its arguments.
 pub fn putBlackboardValue(self: *Context, key: []const u8, value: Value) !void {
-    if (self.blackboard.get(key)) |current| {
-        switch (current) {
-            .string => |s| self.gpa.free(s),
-            else => {},
-        }
-    }
-
-    switch (value) {
-        .string => |s| {
-            const owned = try self.gpa.dupe(u8, s);
-            try self.blackboard.put(key, owned);
-        },
-        else => try self.blackboard.put(key, value),
-    }
+    try bb.put(&self.blackboard, key, value);
 }
 
 // TODO: add useful methods such as:
@@ -111,14 +89,10 @@ pub fn putBlackboardValue(self: *Context, key: []const u8, value: Value) !void {
 
 /// A generic Value to be stored in the Blackboard.
 /// We limit ourselves to types which may easily be loaded from JSON.
-pub const Value = union(enum(u8)) {
-    int: i64,
-    float: f64,
-    bool: bool,
-    string: []const u8,
-};
+pub const Value = bb.Value;
 
 /// A generic key:value store for contextual data within the behavior tree
-pub const Blackboard = std.StringHashMap(Value);
+pub const Blackboard = bb.Blackboard;
 
+const bb = @import("blackboard.zig");
 const std = @import("std");

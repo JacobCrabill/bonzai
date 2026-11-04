@@ -149,21 +149,19 @@ pub fn deinit(node: *Node, alloc: Allocator) void {
         else => {},
     }
     alloc.free(node.name);
-    var iter = node.blackboard.iterator();
-    while (iter.next()) |elem| {
-        switch (elem.value_ptr.*) {
-            .string => |s| alloc.free(s),
-            else => {},
-        }
-        alloc.free(elem.key_ptr.*);
-    }
-    node.blackboard.deinit();
+    bb.deinit(&node.blackboard);
     node.vtable.deinit(node, alloc);
 }
 
 /// Get a value from the Node's Blackboard
 pub fn getValue(node: *const Node, key: []const u8) ?BlackboardValue {
     return node.blackboard.get(key);
+}
+
+/// Put a value into the Node's private Blackboard, replacing any existing value.
+/// The key and any string value are copied.
+pub fn putValue(node: *Node, key: []const u8, value: BlackboardValue) !void {
+    try bb.put(&node.blackboard, key, value);
 }
 
 /// Cast a Node pointer to its "derived" type.
@@ -175,8 +173,9 @@ pub fn cast(node: *Node, comptime T: type) *T {
 const Context = @import("Context.zig");
 const Control = @import("base_types/Control.zig");
 const Decorator = @import("base_types/Decorator.zig");
-const Blackboard = @import("blackboard.zig").Blackboard;
-const BlackboardValue = @import("blackboard.zig").Value;
+const bb = @import("blackboard.zig");
+const Blackboard = bb.Blackboard;
+const BlackboardValue = bb.Value;
 const Logger = @import("Logger.zig");
 
 const std = @import("std");

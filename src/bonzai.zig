@@ -6,6 +6,7 @@ pub const Context = @import("Context.zig");
 pub const Tree = @import("Tree.zig");
 pub const Factory = @import("Factory.zig");
 pub const Logger = @import("Logger.zig");
+pub const blackboard = @import("blackboard.zig");
 
 pub const base_types = struct {
     pub const Decorator = @import("base_types/Decorator.zig");

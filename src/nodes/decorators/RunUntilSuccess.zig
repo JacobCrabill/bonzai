@@ -27,6 +27,7 @@ pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8) !
 /// Create an instance of this node type
 pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node {
     var node = try alloc.create(@This());
+    errdefer alloc.destroy(node);
     try node.init(alloc, ctx, name);
     return &node.node;
 }

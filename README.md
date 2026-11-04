@@ -30,9 +30,54 @@ Bonzai is built around a generic `Node` type and a `Factory` to register and ins
 node implementations. While Bonzai has a few basic node types included (such as Sequence, Fallback,
 Inverter), it is expected that users will implement their own nodes for their own use case.
 
-See `DummyAction.zig` and `src/tests/test.zig` for an example of implementing a Stateful Action node
-making use of a custom Context data type, registering it with the Factory, loading it via JSON, and
-making use of it from within a Tree.
+### Custom Node types
+
+A custom node is a plain struct. `bonzai.NodeImpl(T)` generates the allocation, vtable, and
+destruction code for it, and checks its declarations at compile time:
+
+```zig
+const Retry = struct {
+    // Required: .action, .condition, .decorator, or .control
+    pub const kind: bonzai.Node.Kind = .decorator;
+
+    // Per-instance state; every field needs a default value
+    attempts: u32 = 0,
+
+    // Required. The `node` parameter is optional if you don't need it.
+    pub fn tick(self: *Retry, node: *bonzai.Node) bonzai.Node.Status {
+        const max = if (node.getValue("max_attempts")) |v| v.int else 3;
+        return switch (node.data.decorator.tick()) {
+            .failure => blk: {
+                self.attempts += 1;
+                if (self.attempts >= max) break :blk .failure;
+                node.data.decorator.halt();
+                break :blk .running;
+            },
+            else => |s| s,
+        };
+    }
+
+    // Optional: reset state when halted (children are halted automatically)
+    pub fn halt(self: *Retry) void {
+        self.attempts = 0;
+    }
+
+    // Optional: free any resources owned by the node
+    // pub fn deinit(self: *Retry, gpa: std.mem.Allocator) void {}
+};
+
+try factory.register("Retry", Retry);
+```
+
+Actions may instead implement `onStarted` (optional), `onRunning`, and `onHalted` (optional),
+which are called on the first tick, on subsequent ticks while Running, and when halted.
+
+To get from a base `*Node` to your type, use `node.as(Retry)` (asserts the type) or
+`node.tryAs(Retry)` (returns null for other types); to go back, use `bonzai.nodeOf(self)`.
+
+See `DummyAction.zig` and `src/tests/test.zig` for an example of a stateful Action making use of a
+custom Context data type, registering it with the Factory, loading it via JSON, and making use of it
+from within a Tree.
 
 ### Example
 
@@ -95,7 +140,7 @@ test "[Tree] Tick tree with logger" {
 
     // Register the built-in and custom Node types
     try bonzai.registerBuiltinTypes(&factory);
-    try factory.registerNode("DummyAction", DummyAction.create);
+    try factory.register("DummyAction", DummyAction);
 
     const json = @embedFile("json/test-dummy-action.json");
 

@@ -164,13 +164,26 @@ pub fn putValue(node: *Node, key: []const u8, value: BlackboardValue) !void {
     try bb.put(&node.blackboard, key, value);
 }
 
-/// Cast a Node pointer to its "derived" type.
-/// Assumes the derived type follows the convention of storing the Node as a field named 'node'.
+/// Get the implementation of a Node created by `NodeImpl(T)`.
+/// Asserts (in safe builds) that the node really is a `T`.
+pub fn as(node: *Node, comptime T: type) *T {
+    return NodeImpl(T).cast(node);
+}
+
+/// Get the implementation of a Node created by `NodeImpl(T)`, or null if it is not a `T`.
+pub fn tryAs(node: *Node, comptime T: type) ?*T {
+    return if (NodeImpl(T).isInstance(node)) NodeImpl(T).cast(node) else null;
+}
+
+/// Cast a Node pointer to its "derived" type, for types implemented manually
+/// (without `NodeImpl`). Assumes the derived type stores the Node in a field named 'node'.
+/// Unchecked: prefer `as()` for NodeImpl types.
 pub fn cast(node: *Node, comptime T: type) *T {
     return @alignCast(@fieldParentPtr("node", node));
 }
 
 const Context = @import("Context.zig");
+const NodeImpl = @import("node_impl.zig").NodeImpl;
 const Control = @import("base_types/Control.zig");
 const Decorator = @import("base_types/Decorator.zig");
 const bb = @import("blackboard.zig");

@@ -1,14 +1,14 @@
 //! A Fallback node ticks each of its children in series, one child per tick,
 //! advancing to the next child only if the previous child returned Failure.
-//! If any child returns Success, the Sequence returns Success.
+//! If any child returns Success, the Fallback returns Success.
 const Fallback = @This();
 
-node: Node,
+pub const kind: Node.Kind = .control;
+
 current_child: usize = 0,
 
-pub fn tick(node: *Node) Node.Status {
-    const fb: *Fallback = @alignCast(@fieldParentPtr("node", node));
-    var control = node.data.control;
+pub fn tick(fb: *Fallback, node: *Node) Node.Status {
+    const control = &node.data.control;
 
     if (fb.current_child >= control.numChildren()) return .failure;
 
@@ -19,7 +19,7 @@ pub fn tick(node: *Node) Node.Status {
         .failure => fb.current_child += 1,
         .running, .success => return child_status,
         .idle => {
-            std.debug.print("ERROR: Nodes are not allowed to return IDLE\n", .{});
+            log.err("Node '{s}' returned Idle from tick()", .{control.getChild(fb.current_child).name});
             return .failure;
         },
     }
@@ -30,43 +30,17 @@ pub fn tick(node: *Node) Node.Status {
     return .running;
 }
 
-/// Halt the node and all of its children
-pub fn halt(node: *Node) void {
-    const fb: *Fallback = @alignCast(@fieldParentPtr("node", node));
-    fb.node.data.control.halt();
+/// Reset to the first child (children are halted automatically)
+pub fn halt(fb: *Fallback) void {
     fb.current_child = 0;
-}
-
-/// Initialize a new Fallback node.
-pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8) !void {
-    self.current_child = 0;
-    self.node = try .init(alloc, ctx, name, .control, .{
-        .tick = tick,
-        .halt = halt,
-        .deinit = deinit,
-    });
-}
-
-/// Create a new Sequence node, returning the base Node pointer
-pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node {
-    var node = try alloc.create(@This());
-    errdefer alloc.destroy(node);
-    try node.init(alloc, ctx, name);
-    return &node.node;
-}
-
-/// Deinitialize the node and free all resources
-pub fn deinit(node: *Node, alloc: Allocator) void {
-    const fb: *Fallback = @alignCast(@fieldParentPtr("node", node));
-    alloc.destroy(fb);
 }
 
 const Node = @import("../../Node.zig");
 const Context = @import("../../Context.zig");
+const NodeImpl = @import("../../node_impl.zig").NodeImpl;
 
 const std = @import("std");
-const ArrayList = std.ArrayList;
-const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.bonzai);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Tests
@@ -80,16 +54,16 @@ test "[Fallback] run to success" {
     var ctx = try Context.create(alloc);
     defer ctx.deinit();
 
-    const name = "run-to-failure";
-    const fb: *Node = try Fallback.create(alloc, ctx, name);
+    const name = "run-to-success";
+    const fb: *Node = try NodeImpl(Fallback).create(alloc, ctx, name);
     defer fb.deinit(alloc);
 
     try std.testing.expectEqualStrings(fb.name, name);
 
     // Create a few child nodes to add to the Fallback
-    const f1 = try AlwaysFailure.create(alloc, ctx, "failure-1");
-    const f2 = try AlwaysFailure.create(alloc, ctx, "failure-2");
-    const s1 = try AlwaysSuccess.create(alloc, ctx, "success-1");
+    const f1 = try NodeImpl(AlwaysFailure).create(alloc, ctx, "failure-1");
+    const f2 = try NodeImpl(AlwaysFailure).create(alloc, ctx, "failure-2");
+    const s1 = try NodeImpl(AlwaysSuccess).create(alloc, ctx, "success-1");
 
     try fb.data.control.addChild(alloc, f1);
     try fb.data.control.addChild(alloc, f2);
@@ -108,16 +82,16 @@ test "[Fallback] run to failure" {
     var ctx = try Context.create(alloc);
     defer ctx.deinit();
 
-    const name = "run-to-success";
-    const fb: *Node = try Fallback.create(alloc, ctx, name);
+    const name = "run-to-failure";
+    const fb: *Node = try NodeImpl(Fallback).create(alloc, ctx, name);
     defer fb.deinit(alloc);
 
     try std.testing.expectEqualStrings(fb.name, name);
 
     // Create a few child nodes to add to the Fallback
-    const f1 = try AlwaysFailure.create(alloc, ctx, "failure-1");
-    const f2 = try AlwaysFailure.create(alloc, ctx, "failure-2");
-    const f3 = try AlwaysFailure.create(alloc, ctx, "failure-3");
+    const f1 = try NodeImpl(AlwaysFailure).create(alloc, ctx, "failure-1");
+    const f2 = try NodeImpl(AlwaysFailure).create(alloc, ctx, "failure-2");
+    const f3 = try NodeImpl(AlwaysFailure).create(alloc, ctx, "failure-3");
 
     try fb.data.control.addChild(alloc, f1);
     try fb.data.control.addChild(alloc, f2);

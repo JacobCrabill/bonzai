@@ -1,35 +1,10 @@
+//! A trivial Condition which always returns Failure.
 const AlwaysFailure = @This();
 
-node: Node,
+pub const kind: Node.Kind = .condition;
 
-pub fn tick(_: *Node) Node.Status {
+pub fn tick(_: *AlwaysFailure) Node.Status {
     return .failure;
 }
 
-/// Initialize a new node of this type
-pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8) !void {
-    self.node = try .init(alloc, ctx, name, .condition, .{
-        .tick = tick,
-        .deinit = deinit,
-    });
-}
-
-/// Create an instance of this node type
-pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node {
-    var node = try alloc.create(@This());
-    errdefer alloc.destroy(node);
-    try node.init(alloc, ctx, name);
-    return &node.node;
-}
-
-/// Destroy this node instance
-pub fn deinit(node: *Node, alloc: Allocator) void {
-    const self: *@This() = @alignCast(@fieldParentPtr("node", node));
-    alloc.destroy(self);
-}
-
 const Node = @import("../../Node.zig");
-const Context = @import("../../Context.zig");
-
-const std = @import("std");
-const Allocator = std.mem.Allocator;

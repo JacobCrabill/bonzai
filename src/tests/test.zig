@@ -25,7 +25,7 @@ test "[Tree] Tick tree with logger" {
     defer factory.deinit();
 
     try bonzai.registerBuiltinTypes(&factory);
-    try factory.registerNode("DummyAction", DummyAction.create);
+    try factory.register("DummyAction", DummyAction);
 
     const json = @embedFile("json/test-dummy-action.json");
 

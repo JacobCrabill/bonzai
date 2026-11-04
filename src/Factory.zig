@@ -3,7 +3,7 @@ pub const Factory = @This();
 /// A BuilderFn creates a specific Node type with the given name and returns a
 /// pointer to the "base-class" Node field within it.
 /// TODO: Create error union for the 'create' method.
-const BuilderFn = *const fn (alloc: std.mem.Allocator, ctx: *Context, name: []const u8) anyerror!*Node;
+pub const BuilderFn = *const fn (alloc: std.mem.Allocator, ctx: *Context, name: []const u8) anyerror!*Node;
 
 io: std.Io,
 
@@ -26,9 +26,14 @@ pub fn deinit(factory: *Factory) void {
     factory.registry.deinit(factory.gpa);
 }
 
-/// Register a builder function
+/// Register a builder function. Prefer `register()` for types using `NodeImpl`.
 pub fn registerNode(factory: *Factory, typename: []const u8, func: BuilderFn) !void {
     try factory.registry.put(factory.gpa, typename, func);
+}
+
+/// Register a Node implementation type (see `NodeImpl`) under the given type name
+pub fn register(factory: *Factory, typename: []const u8, comptime T: type) !void {
+    try factory.registerNode(typename, NodeImpl(T).create);
 }
 
 /// Create a new Node of the given type.
@@ -303,6 +308,7 @@ fn paramValue(v: std.json.Value) ?Value {
 }
 
 const Node = @import("Node.zig");
+const NodeImpl = @import("node_impl.zig").NodeImpl;
 const Context = @import("Context.zig");
 const Value = @import("blackboard.zig").Value;
 const Tree = @import("Tree.zig");
@@ -324,8 +330,8 @@ test "[Factory] Register & Create Nodes" {
     const Sequence = @import("nodes/controls/Sequence.zig");
     const AlwaysRunning = @import("nodes/actions/AlwaysRunning.zig");
 
-    try factory.registerNode("Sequence", Sequence.create);
-    try factory.registerNode("AlwaysRunning", AlwaysRunning.create);
+    try factory.register("Sequence", Sequence);
+    try factory.register("AlwaysRunning", AlwaysRunning);
 
     const seq_node: *Node = try factory.createNode(ctx, "Sequence", "seq-1");
     const ar_node: *Node = try factory.createNode(ctx, "AlwaysRunning", "run-1");
@@ -346,10 +352,10 @@ test "[Factory] Load from JSON" {
     const AlwaysSuccess = @import("nodes/conditions/AlwaysSuccess.zig");
     const AlwaysFailure = @import("nodes/conditions/AlwaysFailure.zig");
 
-    try factory.registerNode("Sequence", Sequence.create);
-    try factory.registerNode("Inverter", Inverter.create);
-    try factory.registerNode("AlwaysFailure", AlwaysFailure.create);
-    try factory.registerNode("AlwaysSuccess", AlwaysSuccess.create);
+    try factory.register("Sequence", Sequence);
+    try factory.register("Inverter", Inverter);
+    try factory.register("AlwaysFailure", AlwaysFailure);
+    try factory.register("AlwaysSuccess", AlwaysSuccess);
 
     const json = @embedFile("tests/json/test-tree.json");
 

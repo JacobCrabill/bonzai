@@ -3,12 +3,12 @@
 //! If any child returns Failure, the Sequence returns Failure.
 const Sequence = @This();
 
-node: Node,
+pub const kind: Node.Kind = .control;
+
 current_child: usize = 0,
 
-pub fn tick(node: *Node) Node.Status {
-    const seq: *Sequence = @alignCast(@fieldParentPtr("node", node));
-    var control = node.data.control;
+pub fn tick(seq: *Sequence, node: *Node) Node.Status {
+    const control = &node.data.control;
 
     if (seq.current_child >= control.numChildren()) return .failure;
 
@@ -19,7 +19,7 @@ pub fn tick(node: *Node) Node.Status {
         .success => seq.current_child += 1,
         .running, .failure => return child_status,
         .idle => {
-            std.debug.print("ERROR: Nodes are not allowed to return IDLE\n", .{});
+            log.err("Node '{s}' returned Idle from tick()", .{control.getChild(seq.current_child).name});
             return .failure;
         },
     }
@@ -30,42 +30,17 @@ pub fn tick(node: *Node) Node.Status {
     return .running;
 }
 
-/// Halt the node and all of its children
-pub fn halt(node: *Node) void {
-    const seq: *Sequence = @alignCast(@fieldParentPtr("node", node));
+/// Reset to the first child (children are halted automatically)
+pub fn halt(seq: *Sequence) void {
     seq.current_child = 0;
-}
-
-/// Initialize a new Sequence node.
-pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8) !void {
-    self.current_child = 0;
-    self.node = try .init(alloc, ctx, name, .control, .{
-        .tick = tick,
-        .halt = halt,
-        .deinit = deinit,
-    });
-}
-
-/// Create a new Sequence node, returning the base Node pointer
-pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node {
-    var node = try alloc.create(@This());
-    errdefer alloc.destroy(node);
-    try node.init(alloc, ctx, name);
-    return &node.node;
-}
-
-/// Deinit and destroy the Sequence instance
-pub fn deinit(node: *Node, alloc: Allocator) void {
-    const self: *@This() = @alignCast(@fieldParentPtr("node", node));
-    alloc.destroy(self);
 }
 
 const Node = @import("../../Node.zig");
 const Context = @import("../../Context.zig");
+const NodeImpl = @import("../../node_impl.zig").NodeImpl;
 
 const std = @import("std");
-const ArrayList = std.ArrayList;
-const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.bonzai);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Tests
@@ -80,15 +55,15 @@ test "[Sequence] run to failure" {
     defer ctx.deinit();
 
     const name = "run-to-failure";
-    const seq: *Node = try Sequence.create(alloc, ctx, name);
+    const seq: *Node = try NodeImpl(Sequence).create(alloc, ctx, name);
     defer seq.deinit(alloc);
 
     try std.testing.expectEqualStrings(seq.name, name);
 
     // Create a few child nodes to add to the Sequence
-    const s1 = try AlwaysSuccess.create(alloc, ctx, "success-1");
-    const s2 = try AlwaysSuccess.create(alloc, ctx, "success-2");
-    const f1 = try AlwaysFailure.create(alloc, ctx, "failure-1");
+    const s1 = try NodeImpl(AlwaysSuccess).create(alloc, ctx, "success-1");
+    const s2 = try NodeImpl(AlwaysSuccess).create(alloc, ctx, "success-2");
+    const f1 = try NodeImpl(AlwaysFailure).create(alloc, ctx, "failure-1");
 
     try seq.data.control.addChild(alloc, s1);
     try seq.data.control.addChild(alloc, s2);
@@ -108,15 +83,15 @@ test "[Sequence] run to success" {
     defer ctx.deinit();
 
     const name = "run-to-success";
-    const seq: *Node = try Sequence.create(alloc, ctx, name);
+    const seq: *Node = try NodeImpl(Sequence).create(alloc, ctx, name);
     defer seq.deinit(alloc);
 
     try std.testing.expectEqualStrings(seq.name, name);
 
     // Create a few child nodes to add to the Sequence
-    const s1 = try AlwaysSuccess.create(alloc, ctx, "success-1");
-    const s2 = try AlwaysSuccess.create(alloc, ctx, "success-2");
-    const s3 = try AlwaysSuccess.create(alloc, ctx, "success-3");
+    const s1 = try NodeImpl(AlwaysSuccess).create(alloc, ctx, "success-1");
+    const s2 = try NodeImpl(AlwaysSuccess).create(alloc, ctx, "success-2");
+    const s3 = try NodeImpl(AlwaysSuccess).create(alloc, ctx, "success-3");
 
     try seq.data.control.addChild(alloc, s1);
     try seq.data.control.addChild(alloc, s2);

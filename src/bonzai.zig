@@ -2,6 +2,8 @@
 const std = @import("std");
 
 pub const Node = @import("Node.zig");
+pub const NodeImpl = @import("node_impl.zig").NodeImpl;
+pub const nodeOf = @import("node_impl.zig").nodeOf;
 pub const Context = @import("Context.zig");
 pub const Tree = @import("Tree.zig");
 pub const Factory = @import("Factory.zig");
@@ -20,8 +22,7 @@ pub const nodes = struct {
     };
 
     pub const actions = struct {
-        pub const StatefulAction = @import("nodes/actions/StatefulAction.zig");
-        pub const AlwaysRunning = @import("nodes/actions//AlwaysRunning.zig");
+        pub const AlwaysRunning = @import("nodes/actions/AlwaysRunning.zig");
     };
 
     pub const decorators = struct {
@@ -39,15 +40,15 @@ pub const loggers = struct {
     pub const StdoutLogger = @import("loggers/StdoutLogger.zig");
 };
 
-/// Registar all Node types built in to Bonzai
+/// Register all Node types built in to Bonzai
 pub fn registerBuiltinTypes(factory: *Factory) !void {
-    try factory.registerNode("Sequence", nodes.controls.Sequence.create);
-    try factory.registerNode("Fallback", nodes.controls.Fallback.create);
-    try factory.registerNode("Inverter", nodes.decorators.Inverter.create);
-    try factory.registerNode("RunUntilSuccess", nodes.decorators.RunUntilSuccess.create);
-    try factory.registerNode("AlwaysRunning", nodes.actions.AlwaysRunning.create);
-    try factory.registerNode("AlwaysSuccess", nodes.conditions.AlwaysSuccess.create);
-    try factory.registerNode("AlwaysFailure", nodes.conditions.AlwaysFailure.create);
+    try factory.register("Sequence", nodes.controls.Sequence);
+    try factory.register("Fallback", nodes.controls.Fallback);
+    try factory.register("Inverter", nodes.decorators.Inverter);
+    try factory.register("RunUntilSuccess", nodes.decorators.RunUntilSuccess);
+    try factory.register("AlwaysRunning", nodes.actions.AlwaysRunning);
+    try factory.register("AlwaysSuccess", nodes.conditions.AlwaysSuccess);
+    try factory.register("AlwaysFailure", nodes.conditions.AlwaysFailure);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -1,11 +1,10 @@
-//! An RunUntilSuccess ticks its child forever until it returns Success
+//! A RunUntilSuccess ticks its child forever until it returns Success
 const RunUntilSuccess = @This();
 
-node: Node,
+pub const kind: Node.Kind = .decorator;
 
-pub fn tick(node: *Node) Node.Status {
-    const result = node.data.decorator.tick();
-    return switch (result) {
+pub fn tick(_: *RunUntilSuccess, node: *Node) Node.Status {
+    return switch (node.data.decorator.tick()) {
         .success => .success,
         .running => .running,
         .failure => blk: {
@@ -16,33 +15,11 @@ pub fn tick(node: *Node) Node.Status {
     };
 }
 
-/// Initialize a new node of this type
-pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8) !void {
-    self.node = try .init(alloc, ctx, name, .decorator, .{
-        .tick = tick,
-        .deinit = deinit,
-    });
-}
-
-/// Create an instance of this node type
-pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node {
-    var node = try alloc.create(@This());
-    errdefer alloc.destroy(node);
-    try node.init(alloc, ctx, name);
-    return &node.node;
-}
-
-/// Deinitialize the node and free all resources
-pub fn deinit(node: *Node, alloc: Allocator) void {
-    const self = node.cast(@This());
-    alloc.destroy(self);
-}
-
 const Node = @import("../../Node.zig");
 const Context = @import("../../Context.zig");
+const NodeImpl = @import("../../node_impl.zig").NodeImpl;
 
 const std = @import("std");
-const Allocator = std.mem.Allocator;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Tests
@@ -59,12 +36,12 @@ test "[RunUntilSuccess] basics" {
 
     {
         const name = "running";
-        const run: *Node = try RunUntilSuccess.create(alloc, ctx, name);
+        const run: *Node = try NodeImpl(RunUntilSuccess).create(alloc, ctx, name);
         defer run.deinit(alloc);
 
         try std.testing.expectEqualStrings(run.name, name);
 
-        const s1 = try AlwaysRunning.create(alloc, ctx, "running-1");
+        const s1 = try NodeImpl(AlwaysRunning).create(alloc, ctx, "running-1");
         run.data.decorator.child = s1;
         try std.testing.expectEqual(.running, run.tick());
 
@@ -74,12 +51,12 @@ test "[RunUntilSuccess] basics" {
 
     {
         const name = "failure";
-        var run = try RunUntilSuccess.create(alloc, ctx, name);
+        var run = try NodeImpl(RunUntilSuccess).create(alloc, ctx, name);
         defer run.deinit(alloc);
 
         try std.testing.expectEqualStrings(run.name, name);
 
-        const s1 = try AlwaysFailure.create(alloc, ctx, "failure-1");
+        const s1 = try NodeImpl(AlwaysFailure).create(alloc, ctx, "failure-1");
         run.data.decorator.child = s1;
         try std.testing.expectEqual(.running, run.tick());
         try std.testing.expectEqual(.running, run.tick());
@@ -93,12 +70,12 @@ test "[RunUntilSuccess] basics" {
 
     {
         const name = "success";
-        const run = try RunUntilSuccess.create(alloc, ctx, name);
+        const run = try NodeImpl(RunUntilSuccess).create(alloc, ctx, name);
         defer run.deinit(alloc);
 
         try std.testing.expectEqualStrings(run.name, name);
 
-        const s1 = try AlwaysSuccess.create(alloc, ctx, "success-1");
+        const s1 = try NodeImpl(AlwaysSuccess).create(alloc, ctx, "success-1");
         run.data.decorator.child = s1;
         try std.testing.expectEqual(.success, run.tick());
 

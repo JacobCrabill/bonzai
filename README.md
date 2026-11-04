@@ -106,7 +106,7 @@ test "[Tree] Tick tree with logger" {
     var logger: bonzai.loggers.StdoutLogger = .init(io);
 
     // Add a simple logger to show the progress of the tree
-    try tree.addLogger(gpa, logger.interface());
+    try tree.addLogger(logger.interface());
 
     // Tick the tree to completion
     for (1..custom_context.num_ticks) |_| {

@@ -33,7 +33,7 @@ test "[Tree] Tick tree with logger" {
     defer tree.deinit();
 
     var logger: bonzai.loggers.StdoutLogger = .init(io);
-    try tree.addLogger(alloc, logger.interface());
+    try tree.addLogger(logger.interface());
 
     for (1..custom_context.num_ticks) |_| {
         try std.testing.expectEqual(.running, tree.tick());

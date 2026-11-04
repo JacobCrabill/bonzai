@@ -4,7 +4,7 @@ const Inverter = @This();
 node: Node,
 
 pub fn tick(node: *Node) Node.Status {
-    const result = node.data.decorator.child.tick();
+    const result = node.data.decorator.tick();
     return switch (result) {
         .running => .running,
         .success => .failure,
@@ -65,7 +65,7 @@ test "[Inverter] basics" {
         try std.testing.expectEqual(.running, inv.tick());
 
         inv.halt();
-        try std.testing.expectEqual(.idle, inv.data.decorator.child.status);
+        try std.testing.expectEqual(.idle, inv.data.decorator.child.?.status);
     }
 
     {
@@ -80,7 +80,7 @@ test "[Inverter] basics" {
         try std.testing.expectEqual(.failure, inv.tick());
 
         inv.halt();
-        try std.testing.expectEqual(.idle, inv.data.decorator.child.status);
+        try std.testing.expectEqual(.idle, inv.data.decorator.child.?.status);
     }
 
     {
@@ -95,6 +95,6 @@ test "[Inverter] basics" {
         try std.testing.expectEqual(.success, inv.tick());
 
         inv.halt();
-        try std.testing.expectEqual(.idle, inv.data.decorator.child.status);
+        try std.testing.expectEqual(.idle, inv.data.decorator.child.?.status);
     }
 }

@@ -168,7 +168,7 @@ pub fn getValue(node: *const Node, key: []const u8) ?BlackboardValue {
 
 /// Cast a Node pointer to its "derived" type.
 /// Assumes the derived type follows the convention of storing the Node as a field named 'node'.
-pub fn cast(node: *Node, T: anytype) *T {
+pub fn cast(node: *Node, comptime T: type) *T {
     return @alignCast(@fieldParentPtr("node", node));
 }
 

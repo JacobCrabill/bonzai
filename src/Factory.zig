@@ -61,26 +61,26 @@ pub fn loadFromJson(factory: *Factory, ctx: *Context, json: []const u8) !Tree {
                 const key = elem.key_ptr;
                 switch (elem.value_ptr.*) {
                     .string => |s| {
-                        try tree.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
-                            .{ .string = try tree.allocator.dupe(u8, s) },
+                        try ctx.blackboard.put(
+                            try ctx.gpa.dupe(u8, key.*),
+                            .{ .string = try ctx.gpa.dupe(u8, s) },
                         );
                     },
                     .bool => |b| {
-                        try tree.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
+                        try ctx.blackboard.put(
+                            try ctx.gpa.dupe(u8, key.*),
                             .{ .bool = b },
                         );
                     },
                     .integer => |b| {
-                        try tree.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
+                        try ctx.blackboard.put(
+                            try ctx.gpa.dupe(u8, key.*),
                             .{ .int = b },
                         );
                     },
                     .float => |b| {
-                        try tree.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
+                        try ctx.blackboard.put(
+                            try ctx.gpa.dupe(u8, key.*),
                             .{ .float = b },
                         );
                     },
@@ -116,25 +116,25 @@ fn parseJsonValue(factory: *Factory, tree: *Tree, parent: ?*Node, value: std.jso
                 switch (elem.value_ptr.*) {
                     .string => |s| {
                         try node.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
-                            .{ .string = try tree.allocator.dupe(u8, s) },
+                            try tree.gpa.dupe(u8, key.*),
+                            .{ .string = try tree.gpa.dupe(u8, s) },
                         );
                     },
                     .bool => |b| {
                         try node.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
+                            try tree.gpa.dupe(u8, key.*),
                             .{ .bool = b },
                         );
                     },
                     .integer => |b| {
                         try node.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
+                            try tree.gpa.dupe(u8, key.*),
                             .{ .int = b },
                         );
                     },
                     .float => |b| {
                         try node.blackboard.put(
-                            try tree.allocator.dupe(u8, key.*),
+                            try tree.gpa.dupe(u8, key.*),
                             .{ .float = b },
                         );
                     },
@@ -269,7 +269,7 @@ test "[Factory] Load from JSON" {
     var tree = try factory.loadFromJson(ctx, json);
     defer tree.deinit();
 
-    try std.testing.expectEqualStrings(tree.blackboard.get("some-global-value").?.string, "Hello, Bonzai!");
+    try std.testing.expectEqualStrings(tree.context.blackboard.get("some-global-value").?.string, "Hello, Bonzai!");
 
     try std.testing.expectEqual(.running, tree.tick());
     try std.testing.expectEqual(.success, tree.tick());

@@ -35,12 +35,14 @@ pub fn createWithData(alloc: std.mem.Allocator, data: ?*anyopaque) !*Context {
 /// object, use `deinitWithData()`.
 pub fn deinit(self: *Context) void {
     var iter = self.blackboard.iterator();
-    while (iter.next()) |kv_ptr| {
-        switch (kv_ptr.value_ptr.*) {
+    while (iter.next()) |elem| {
+        switch (elem.value_ptr.*) {
             .string => |s| self.gpa.free(s),
             else => {},
         }
+        self.gpa.free(elem.key_ptr.*);
     }
+    self.blackboard.deinit();
     self.gpa.destroy(self);
 }
 
@@ -61,7 +63,7 @@ pub fn deinitWithData(self: *Context, T: type) void {
                 @compileError("Cannot inspect argument types for variadic function");
 
             const ptypes = info.param_types;
-            if (ptypes.len < 1 or ptypes[0] == null or ptypes[0].? != T) {
+            if (ptypes.len < 1 or ptypes[0] == null or ptypes[0].? != *T) {
                 @compileError("Context.data.deinit() must take one argument, 'd: *@This()'");
             }
 

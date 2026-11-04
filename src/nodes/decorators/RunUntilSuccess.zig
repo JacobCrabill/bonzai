@@ -4,13 +4,12 @@ const RunUntilSuccess = @This();
 node: Node,
 
 pub fn tick(node: *Node) Node.Status {
-    var child: *Node = node.data.decorator.child;
-    const result = child.tick();
+    const result = node.data.decorator.tick();
     return switch (result) {
         .success => .success,
         .running => .running,
         .failure => blk: {
-            child.halt();
+            node.data.decorator.halt();
             break :blk .running;
         },
         .idle => @panic("Nodes may not return 'idle' from tick()!"),
@@ -69,7 +68,7 @@ test "[RunUntilSuccess] basics" {
         try std.testing.expectEqual(.running, run.tick());
 
         run.halt();
-        try std.testing.expectEqual(.idle, run.data.decorator.child.status);
+        try std.testing.expectEqual(.idle, run.data.decorator.child.?.status);
     }
 
     {
@@ -88,7 +87,7 @@ test "[RunUntilSuccess] basics" {
         // ...we could keep going here forever
 
         run.halt();
-        try std.testing.expectEqual(.idle, run.data.decorator.child.status);
+        try std.testing.expectEqual(.idle, run.data.decorator.child.?.status);
     }
 
     {
@@ -103,6 +102,6 @@ test "[RunUntilSuccess] basics" {
         try std.testing.expectEqual(.success, run.tick());
 
         run.halt();
-        try std.testing.expectEqual(.idle, run.data.decorator.child.status);
+        try std.testing.expectEqual(.idle, run.data.decorator.child.?.status);
     }
 }

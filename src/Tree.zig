@@ -1,37 +1,26 @@
 pub const Tree = @This();
 
 io: std.Io,
-allocator: Allocator,
+gpa: Allocator,
 root: ?*Node = null,
 context: *Context,
-blackboard: Blackboard,
 nodes: ArrayList(*Node) = .empty,
 loggers: ArrayList(*Logger) = .empty,
 
 /// Initialize the tree, providing an allocator and a global Context.
 /// The Tree does not take ownership of the Context struct.
-pub fn init(io: std.Io, alloc: Allocator, ctx: *Context) Tree {
+pub fn init(io: std.Io, gpa: Allocator, ctx: *Context) Tree {
     return .{
         .io = io,
-        .allocator = alloc,
+        .gpa = gpa,
         .context = ctx,
-        .blackboard = Blackboard.init(alloc),
     };
 }
 
 pub fn deinit(tree: *Tree) void {
-    if (tree.root) |*root| root.*.deinit(tree.allocator);
-    tree.nodes.deinit(tree.allocator);
-    tree.loggers.deinit(tree.allocator);
-    var iter = tree.blackboard.iterator();
-    while (iter.next()) |elem| {
-        switch (elem.value_ptr.*) {
-            .string => |s| tree.allocator.free(s),
-            else => {},
-        }
-        tree.allocator.free(elem.key_ptr.*);
-    }
-    tree.blackboard.deinit();
+    if (tree.root) |*root| root.*.deinit(tree.gpa);
+    tree.nodes.deinit(tree.gpa);
+    tree.loggers.deinit(tree.gpa);
 }
 
 /// Tick the root of the tree
@@ -40,15 +29,15 @@ pub fn tick(tree: *Tree) Node.Status {
 }
 
 pub fn addNode(tree: *Tree, node: *Node) !void {
-    try tree.nodes.append(tree.allocator, node);
+    try tree.nodes.append(tree.gpa, node);
 }
 
 /// Add the given logger as a Status Change callback to all Nodes in the Tree
-pub fn addLogger(tree: *Tree, alloc: Allocator, logger: *Logger) !void {
-    try tree.loggers.append(alloc, logger);
+pub fn addLogger(tree: *Tree, logger: *Logger) !void {
+    try tree.loggers.append(tree.gpa, logger);
 
     const visitor = LoggerVisitor{
-        .alloc = alloc,
+        .gpa = tree.gpa,
         .logger = logger,
     };
 
@@ -60,11 +49,11 @@ pub fn addLogger(tree: *Tree, alloc: Allocator, logger: *Logger) !void {
 /// Struct to act as a capture group for an allocator and a Logger,
 /// for use with applyRecursiveVisitor
 const LoggerVisitor = struct {
-    alloc: Allocator,
+    gpa: Allocator,
     logger: *Logger,
 
     pub fn visit(visitor: LoggerVisitor, node: *Node) void {
-        node.status_changed_cbs.append(visitor.alloc, .{
+        node.status_changed_cbs.append(visitor.gpa, .{
             .ctx = visitor.logger,
             .callback = Logger.callback,
         }) catch @panic("OOM");
@@ -81,7 +70,9 @@ fn applyRecursiveVisitor(node: *Node, comptime T: type, ctx: T, visitor: *const 
             }
         },
         .decorator => |d| {
-            applyRecursiveVisitor(d.child, T, ctx, visitor);
+            if (d.child) |child| {
+                applyRecursiveVisitor(child, T, ctx, visitor);
+            }
         },
         else => {},
     }
@@ -93,9 +84,6 @@ const Node = @import("Node.zig");
 const Context = @import("Context.zig");
 const Logger = @import("Logger.zig");
 const Control = @import("base_types/Control.zig");
-
-const Blackboard = @import("blackboard.zig").Blackboard;
-const BlackboardValue = @import("blackboard.zig").Value;
 
 const std = @import("std");
 const ArrayList = std.ArrayList;
@@ -116,7 +104,7 @@ test "[Tree] Add Logger, No Nodes" {
     defer tree.deinit();
 
     var logger: @import("loggers/StdoutLogger.zig") = .init(io);
-    try tree.addLogger(alloc, logger.interface());
+    try tree.addLogger(logger.interface());
 
     try std.testing.expectEqual(.failure, tree.tick());
 }

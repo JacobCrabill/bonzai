@@ -50,7 +50,7 @@ test "[Inverter] basics" {
     const AlwaysSuccess = @import("../conditions/AlwaysSuccess.zig");
     const AlwaysFailure = @import("../conditions/AlwaysFailure.zig");
 
-    var ctx = try Context.create(alloc, null);
+    var ctx = try Context.create(alloc);
     defer ctx.deinit();
 
     {

@@ -71,9 +71,8 @@ pub fn init(self: *@This(), alloc: Allocator, ctx: *Context, name: []const u8, v
     });
 }
 
-pub fn cast(node: *Node, T: anytype) *T {
-    const action = node.cast(StatefulAction);
-    return @alignCast(@fieldParentPtr("action", action));
+pub fn cast(node: *Node) *StatefulAction {
+    return @alignCast(@fieldParentPtr("action", node.cast(StatefulAction)));
 }
 
 const Node = @import("../../Node.zig");

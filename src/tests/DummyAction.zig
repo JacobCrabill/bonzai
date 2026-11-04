@@ -11,11 +11,12 @@ max_ticks: usize = 2,
 
 pub fn onStarted(action: *StatefulAction) Node.Status {
     std.debug.print("Starting myself!\n", .{});
-    var dummy = StatefulAction.cast(&action.node, DummyAction);
+    var dummy = DummyAction.cast(&action.node);
     dummy.tick_count = 0;
 
     // Access the custom contextual data
     if (action.node.context.data) |data_ptr| {
+        std.debug.print("context.data is not null; casting to CustomContext\n", .{});
         const ctx: *CustomContext = @ptrCast(@alignCast(data_ptr));
         dummy.max_ticks = ctx.num_ticks;
         std.debug.print("{s}\n", .{ctx.some_other_data});
@@ -36,7 +37,7 @@ pub fn onStarted(action: *StatefulAction) Node.Status {
 }
 
 pub fn onRunning(action: *StatefulAction) Node.Status {
-    var dummy = StatefulAction.cast(&action.node, DummyAction);
+    var dummy = DummyAction.cast(&action.node);
 
     if (dummy.tick_count >= 2) return .success;
     dummy.tick_count += 1;
@@ -71,6 +72,12 @@ pub fn create(alloc: Allocator, ctx: *Context, name: []const u8) anyerror!*Node 
     return &node.action.node;
 }
 
+/// Cast a Node to this DummyAction type
+pub fn cast(node: *Node) *DummyAction {
+    const action = node.cast(StatefulAction);
+    return @alignCast(@fieldParentPtr("action", action));
+}
+
 const bonzai = @import("bonzai");
 const StatefulAction = bonzai.nodes.actions.StatefulAction;
 const Node = bonzai.Node;
@@ -86,7 +93,7 @@ const Allocator = std.mem.Allocator;
 test "[DummyAction] run to success" {
     const alloc = std.testing.allocator;
 
-    var ctx = try Context.create(alloc, null);
+    var ctx = try Context.create(alloc);
     defer ctx.deinit();
 
     const name = "run-to-failure";
@@ -94,7 +101,7 @@ test "[DummyAction] run to success" {
     defer dummy.deinit(alloc);
 
     // Example of "casting" the base Node pointer to the derived DummyAction pointer
-    const d: *DummyAction = StatefulAction.cast(dummy, DummyAction);
+    const d: *DummyAction = DummyAction.cast(dummy);
     _ = d;
 
     try std.testing.expectEqualStrings(dummy.name, name);

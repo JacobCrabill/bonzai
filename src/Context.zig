@@ -13,7 +13,16 @@ blackboard: Blackboard,
 data: ?*anyopaque,
 
 /// Initialize a new Context struct
-pub fn create(alloc: std.mem.Allocator, data: ?*anyopaque) !*Context {
+pub fn create(alloc: std.mem.Allocator) !*Context {
+    var self = try alloc.create(Context);
+    self.gpa = alloc;
+    self.blackboard = Blackboard.init(self.gpa);
+    self.data = null;
+    return self;
+}
+
+/// Initialize a new Context struct with a custom 'data' field.
+pub fn createWithData(alloc: std.mem.Allocator, data: ?*anyopaque) !*Context {
     var self = try alloc.create(Context);
     self.gpa = alloc;
     self.blackboard = Blackboard.init(self.gpa);
@@ -45,23 +54,25 @@ pub fn deinit(self: *Context) void {
 /// or:
 ///   `pub fn deinit(d: *T, std.mem.Allocator) void`
 pub fn deinitWithData(self: *Context, T: type) void {
-    if (std.meta.hasFn(T, "deinit")) {
-        const info = @typeInfo(@TypeOf(@field(T, "deinit"))).@"fn";
-        if (info.attrs.varargs)
-            @compileError("Cannot inspect argument types for variadic function");
+    if (self.data) |d_ptr| {
+        if (std.meta.hasFn(T, "deinit")) {
+            const info = @typeInfo(@TypeOf(@field(T, "deinit"))).@"fn";
+            if (info.attrs.varargs)
+                @compileError("Cannot inspect argument types for variadic function");
 
-        const ptypes = info.param_types;
-        if (ptypes.len < 1 or ptypes[0] == null or ptypes[0].? != T) {
-            @compileError("Context.data.deinit() must take one argument, 'd: *@This()'");
-        }
+            const ptypes = info.param_types;
+            if (ptypes.len < 1 or ptypes[0] == null or ptypes[0].? != T) {
+                @compileError("Context.data.deinit() must take one argument, 'd: *@This()'");
+            }
 
-        var d: *T = @ptrCast(@alignCast(self.data));
-        if (ptypes.len == 1) {
-            d.deinit();
-        } else if (ptypes.len == 2 and ptypes[1] != null and ptypes[1].? == std.mem.Allocator) {
-            d.deinit(self.gpa);
-        } else {
-            @compileError("Context.data.deinit() must take either (d: *@This()) or (d: *@This(), m: Allocator)");
+            var d: *T = @ptrCast(@alignCast(d_ptr));
+            if (ptypes.len == 1) {
+                d.deinit();
+            } else if (ptypes.len == 2 and ptypes[1] != null and ptypes[1].? == std.mem.Allocator) {
+                d.deinit(self.gpa);
+            } else {
+                @compileError("Context.data.deinit() must take either (d: *@This()) or (d: *@This(), m: Allocator)");
+            }
         }
     }
     self.deinit();

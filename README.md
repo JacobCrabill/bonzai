@@ -74,23 +74,23 @@ Tree definition (JSON):
 }
 ```
 
-Loading and ticking a JSON-defined tree:
+Loading and ticking a JSON-defined tree with a custom Context type:
 
 ```zig
 test "[Tree] Tick tree with logger" {
     const io = std.testing.io;
-    const alloc = std.testing.allocator;
+    const gpa = std.testing.allocator;
 
     // Create the global Context struct with custom data
     var custom_context = CustomContext{
         .num_ticks = 4,
         .some_other_data = "Hello, bonzai!",
     };
-    var ctx = try bonzai.Context.create(alloc, @ptrCast(&custom_context));
-    defer ctx.deinit();
+    var ctx = try bonzai.Context.createWithData(gpa, @ptrCast(&custom_context));
+    defer ctx.deinitWithData(CustomContext);
 
     // Initialize the Factory
-    var factory = try bonzai.Factory.init(io, alloc);
+    var factory = try bonzai.Factory.init(io, gpa);
     defer factory.deinit();
 
     // Register the built-in and custom Node types
@@ -106,7 +106,7 @@ test "[Tree] Tick tree with logger" {
     var logger: bonzai.loggers.StdoutLogger = .init(io);
 
     // Add a simple logger to show the progress of the tree
-    try tree.addLogger(alloc, logger.interface());
+    try tree.addLogger(gpa, logger.interface());
 
     // Tick the tree to completion
     for (1..custom_context.num_ticks) |_| {

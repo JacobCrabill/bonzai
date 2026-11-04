@@ -231,7 +231,7 @@ test "[Factory] Register & Create Nodes" {
     var factory = try Factory.init(std.testing.io, gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa, null);
+    var ctx = try Context.create(gpa);
     defer ctx.deinit();
 
     const Sequence = @import("nodes/controls/Sequence.zig");
@@ -251,7 +251,7 @@ test "[Factory] Load from JSON" {
     var factory = try Factory.init(std.testing.io, gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa, null);
+    var ctx = try Context.create(gpa);
     defer ctx.deinit();
 
     const Sequence = @import("nodes/controls/Sequence.zig");

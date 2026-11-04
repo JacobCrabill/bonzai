@@ -12,27 +12,30 @@ pub fn tick(fb: *Fallback, node: *Node) Node.Status {
 
     if (fb.current_child >= control.numChildren()) return .failure;
 
-    // Tick the current child, then handle the result
-    const child_status = control.getChild(fb.current_child).tick();
-
-    switch (child_status) {
-        .failure => fb.current_child += 1,
-        .running, .success => return child_status,
-        .idle => {
-            log.err("Node '{s}' returned Idle from tick()", .{control.getChild(fb.current_child).name});
-            return .failure;
-        },
+    while (fb.current_child < control.numChildren()) {
+        const child_status = control.getChild(fb.current_child).tick();
+        switch (child_status) {
+            .failure => fb.current_child += 1,
+            .running, .success => return child_status,
+            .idle => {
+                log.err("Node '{s}' returned Idle from tick()", .{control.getChild(fb.current_child).name});
+                return .failure;
+            },
+        }
     }
 
-    if (fb.current_child == control.numChildren())
+    if (fb.current_child == control.numChildren()) {
+        fb.halt(node);
         return .failure;
+    }
 
     return .running;
 }
 
 /// Reset to the first child (children are halted automatically)
-pub fn halt(fb: *Fallback) void {
+pub fn halt(fb: *Fallback, node: *Node) void {
     fb.current_child = 0;
+    node.data.control.halt();
 }
 
 const Node = @import("../../Node.zig");
@@ -69,9 +72,6 @@ test "[Fallback] run to success" {
     try fb.data.control.addChild(alloc, f2);
     try fb.data.control.addChild(alloc, s1);
 
-    // We should be able to tick the Fallback 3 times, return Running, Running, Success
-    try std.testing.expectEqual(.running, fb.tick());
-    try std.testing.expectEqual(.running, fb.tick());
     try std.testing.expectEqual(.success, fb.tick());
 }
 
@@ -97,8 +97,5 @@ test "[Fallback] run to failure" {
     try fb.data.control.addChild(alloc, f2);
     try fb.data.control.addChild(alloc, f3);
 
-    // We should be able to tick the Fallback 3 times, return Running, Running, Failure
-    try std.testing.expectEqual(.running, fb.tick());
-    try std.testing.expectEqual(.running, fb.tick());
     try std.testing.expectEqual(.failure, fb.tick());
 }

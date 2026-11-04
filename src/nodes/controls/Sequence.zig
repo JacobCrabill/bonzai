@@ -12,27 +12,30 @@ pub fn tick(seq: *Sequence, node: *Node) Node.Status {
 
     if (seq.current_child >= control.numChildren()) return .failure;
 
-    // Tick the current child, then handle the result
-    const child_status = control.getChild(seq.current_child).tick();
-
-    switch (child_status) {
-        .success => seq.current_child += 1,
-        .running, .failure => return child_status,
-        .idle => {
-            log.err("Node '{s}' returned Idle from tick()", .{control.getChild(seq.current_child).name});
-            return .failure;
-        },
+    while (seq.current_child < control.numChildren()) {
+        const child_status = control.getChild(seq.current_child).tick();
+        switch (child_status) {
+            .success => seq.current_child += 1,
+            .running, .failure => return child_status,
+            .idle => {
+                log.err("Node '{s}' returned Idle from tick()", .{control.getChild(seq.current_child).name});
+                return .failure;
+            },
+        }
     }
 
-    if (seq.current_child == control.numChildren())
+    if (seq.current_child == control.numChildren()) {
+        seq.halt(node);
         return .success;
+    }
 
     return .running;
 }
 
 /// Reset to the first child (children are halted automatically)
-pub fn halt(seq: *Sequence) void {
+pub fn halt(seq: *Sequence, node: *Node) void {
     seq.current_child = 0;
+    node.data.control.halt();
 }
 
 const Node = @import("../../Node.zig");
@@ -69,9 +72,6 @@ test "[Sequence] run to failure" {
     try seq.data.control.addChild(alloc, s2);
     try seq.data.control.addChild(alloc, f1);
 
-    // We should be able to tick the Sequence 3 times, return Running, Running, Failure
-    try std.testing.expectEqual(.running, seq.tick());
-    try std.testing.expectEqual(.running, seq.tick());
     try std.testing.expectEqual(.failure, seq.tick());
 }
 
@@ -97,8 +97,5 @@ test "[Sequence] run to success" {
     try seq.data.control.addChild(alloc, s2);
     try seq.data.control.addChild(alloc, s3);
 
-    // We should be able to tick the Sequence 3 times, return Running, Running, Failure
-    try std.testing.expectEqual(.running, seq.tick());
-    try std.testing.expectEqual(.running, seq.tick());
     try std.testing.expectEqual(.success, seq.tick());
 }

@@ -364,7 +364,6 @@ test "[Factory] Load from JSON" {
 
     try std.testing.expectEqualStrings(tree.context.blackboard.get("some-global-value").?.string, "Hello, Bonzai!");
 
-    try std.testing.expectEqual(.running, tree.tick());
     try std.testing.expectEqual(.success, tree.tick());
 }
 

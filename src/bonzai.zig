@@ -57,6 +57,7 @@ pub fn registerBuiltinTypes(factory: *Factory) !void {
 
 test "All Bonzai Module Tests" {
     std.testing.refAllDecls(@This());
+    _ = @import("type_id.zig");
 }
 
 test "Parse from JSON File" {

@@ -17,9 +17,8 @@ pub fn onStarted(self: *DummyAction, node: *Node) Node.Status {
     self.tick_count = 0;
 
     // Access the custom contextual data
-    if (node.context.data) |data_ptr| {
-        std.debug.print("context.data is not null; casting to CustomContext\n", .{});
-        const ctx: *CustomContext = @ptrCast(@alignCast(data_ptr));
+    if (node.context.getData(CustomContext)) |ctx| {
+        std.debug.print("Found CustomContext data\n", .{});
         self.max_ticks = ctx.num_ticks;
         std.debug.print("{s}\n", .{ctx.some_other_data});
     }

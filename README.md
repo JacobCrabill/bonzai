@@ -17,7 +17,9 @@ the base types which Bonzai provides, while keeping the architecture as simple a
 behavior trees are data structures that map perfectly to OOP.
 
 Custom Context struct types may be given to your trees, providing access to arbitrary shared
-read/write data from your custom node types. The Tree also supports a global key/value Blackboard
+read/write data from your custom node types: create the Context with
+`bonzai.Context.createWithData(gpa, &my_data)`, then retrieve it from any node with
+`node.context.getData(MyData)` (which checks the type in safe builds). The Tree also supports a global key/value Blackboard
 for read/write access to primitive data types, and each Node has its own private Blackboard as well.
 
 Trees may be defined in JSON, including specifying Blackboard values for both nodes and the overall
@@ -131,8 +133,8 @@ test "[Tree] Tick tree with logger" {
         .num_ticks = 4,
         .some_other_data = "Hello, bonzai!",
     };
-    var ctx = try bonzai.Context.createWithData(gpa, @ptrCast(&custom_context));
-    defer ctx.deinitWithData(CustomContext);
+    var ctx = try bonzai.Context.createWithData(gpa, &custom_context);
+    defer ctx.deinitWithData();
 
     // Initialize the Factory
     var factory = try bonzai.Factory.init(io, gpa);

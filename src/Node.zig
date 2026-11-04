@@ -73,6 +73,10 @@ pub const VTable = struct {
     /// Deinitialize the node, freeing any resources it may have, and also deallocating itself
     /// TODO: Split into optional "deinit" (called before anything gets freed) and a required "destroy" (called at the very end)
     deinit: *const fn (node: *Node, alloc: Allocator) void,
+    /// Identifies the implementation type, for checked casts. Set by `NodeImpl`.
+    type_id: ?TypeId = null,
+    /// The name of the implementation type, for error messages. Set by `NodeImpl`.
+    type_name: []const u8 = "<unknown>",
 };
 
 pub fn kind(node: *const Node) Kind {
@@ -184,6 +188,7 @@ pub fn cast(node: *Node, comptime T: type) *T {
 
 const Context = @import("Context.zig");
 const NodeImpl = @import("node_impl.zig").NodeImpl;
+const TypeId = @import("type_id.zig").TypeId;
 const Control = @import("base_types/Control.zig");
 const Decorator = @import("base_types/Decorator.zig");
 const bb = @import("blackboard.zig");

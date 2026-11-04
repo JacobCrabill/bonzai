@@ -52,12 +52,14 @@ pub fn NodeImpl(comptime T: type) type {
 
         const stateful = @hasDecl(T, "onRunning");
 
-        /// The vtable shared by all instances of this type. Also used to identify the
+        /// The vtable shared by all instances of this type. Its `type_id` identifies the
         /// type of a `*Node` at runtime (see `isInstance()`).
         pub const vtable: Node.VTable = .{
             .tick = tick,
             .halt = if (@hasDecl(T, "halt") or @hasDecl(T, "onHalted")) halt else null,
             .deinit = deinit,
+            .type_id = typeId(T),
+            .type_name = @typeName(T),
         };
 
         /// Create a new instance, returning a pointer to its base Node.
@@ -74,12 +76,15 @@ pub fn NodeImpl(comptime T: type) type {
 
         /// True if `node` was created by this NodeImpl type
         pub fn isInstance(node: *const Node) bool {
-            return node.vtable.tick == vtable.tick;
+            return node.vtable.type_id == typeId(T);
         }
 
-        /// Get the implementation from a base Node. Asserts that the node is of this type.
+        /// Get the implementation from a base Node. Panics (in safe builds) if the node
+        /// is not of this type.
         pub fn cast(node: *Node) *T {
-            std.debug.assert(isInstance(node));
+            if (std.debug.runtime_safety and !isInstance(node)) {
+                std.debug.panic("Node '{s}' is of type '{s}', not '{s}'", .{ node.name, node.vtable.type_name, @typeName(T) });
+            }
             return &fromNode(node).impl;
         }
 
@@ -201,6 +206,7 @@ fn fnInfo(comptime T: type, comptime decl: []const u8) std.lang.Type.Fn {
 
 const Node = @import("Node.zig");
 const Context = @import("Context.zig");
+const typeId = @import("type_id.zig").typeId;
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
@@ -282,6 +288,30 @@ test "[NodeImpl] tick, halt, cast, deinit" {
         try std.testing.expectEqual(@as(u32, 0), counter.ticks);
     }
     try std.testing.expect(deinit_called);
+}
+
+test "[NodeImpl] identical implementations are distinct types" {
+    const gpa = std.testing.allocator;
+    var ctx = try Context.create(gpa);
+    defer ctx.deinit();
+
+    const Yes1 = struct {
+        pub const kind: Node.Kind = .condition;
+        pub fn tick(_: *@This()) Node.Status {
+            return .success;
+        }
+    };
+    const Yes2 = struct {
+        pub const kind: Node.Kind = .condition;
+        pub fn tick(_: *@This()) Node.Status {
+            return .success;
+        }
+    };
+
+    const node = try NodeImpl(Yes1).create(gpa, ctx, "yes");
+    defer node.deinit(gpa);
+    try std.testing.expect(node.tryAs(Yes1) != null);
+    try std.testing.expect(node.tryAs(Yes2) == null);
 }
 
 test "[NodeImpl] stateful hooks" {

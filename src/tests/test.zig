@@ -17,8 +17,8 @@ test "[Tree] Tick tree with logger" {
         .num_ticks = 4,
         .some_other_data = "Hello, bonzai!",
     };
-    var ctx = try bonzai.Context.createWithData(alloc, @ptrCast(&custom_context));
-    defer ctx.deinitWithData(CustomContext);
+    var ctx = try bonzai.Context.createWithData(alloc, &custom_context);
+    defer ctx.deinitWithData();
 
     // Initialize the Factory
     var factory = try bonzai.Factory.init(io, alloc);

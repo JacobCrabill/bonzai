@@ -44,7 +44,7 @@ data: Data,
 /// Context from the parent tree
 context: *Context,
 
-/// Blackboard (key/value map) for this node
+/// Private Blackboard (key/value map) for this node
 blackboard: Blackboard,
 
 /// The vtable implementing the Node subtype

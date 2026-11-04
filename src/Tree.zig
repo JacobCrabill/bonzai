@@ -64,7 +64,6 @@ const LoggerVisitor = struct {
     logger: *Logger,
 
     pub fn visit(visitor: LoggerVisitor, node: *Node) void {
-        // const visitor: LoggerVisitor = @as(LoggerVisitor, ctx);
         node.status_changed_cbs.append(visitor.alloc, .{
             .ctx = visitor.logger,
             .callback = Logger.callback,

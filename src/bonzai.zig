@@ -28,11 +28,13 @@ pub const nodes = struct {
     pub const decorators = struct {
         pub const Inverter = @import("nodes/decorators/Inverter.zig");
         pub const RunUntilSuccess = @import("nodes/decorators/RunUntilSuccess.zig");
+        pub const Repeat = @import("nodes/decorators/Repeat.zig");
     };
 
     pub const controls = struct {
         pub const Sequence = @import("nodes/controls/Sequence.zig");
         pub const Fallback = @import("nodes/controls/Fallback.zig");
+        pub const Parallel = @import("nodes/controls/Parallel.zig");
     };
 };
 
@@ -44,8 +46,10 @@ pub const loggers = struct {
 pub fn registerBuiltinTypes(factory: *Factory) !void {
     try factory.register("Sequence", nodes.controls.Sequence);
     try factory.register("Fallback", nodes.controls.Fallback);
+    try factory.register("Parallel", nodes.controls.Parallel);
     try factory.register("Inverter", nodes.decorators.Inverter);
     try factory.register("RunUntilSuccess", nodes.decorators.RunUntilSuccess);
+    try factory.register("Repeat", nodes.decorators.Repeat);
     try factory.register("AlwaysRunning", nodes.actions.AlwaysRunning);
     try factory.register("AlwaysSuccess", nodes.conditions.AlwaysSuccess);
     try factory.register("AlwaysFailure", nodes.conditions.AlwaysFailure);

@@ -529,3 +529,52 @@ test "[Factory] configure hook runs after params and children are loaded" {
         );
     }
 }
+
+test "[Factory] Load Parallel and Repeat from JSON" {
+    const gpa = std.testing.allocator;
+    var factory = try testFactory(gpa);
+    defer factory.deinit();
+
+    var ctx = try Context.create(gpa);
+    defer ctx.deinit();
+
+    {
+        // Succeeds once 2 of the 3 branches succeed; the Repeat branch takes 3 ticks
+        const json =
+            \\{"root": {"kind": "Parallel", "name": "par", "params": {"success_threshold": 2},
+            \\  "children": [
+            \\    {"kind": "Repeat", "name": "rep", "params": {"num_cycles": 3},
+            \\     "child": {"kind": "AlwaysSuccess", "name": "ok"}},
+            \\    {"kind": "AlwaysRunning", "name": "forever"},
+            \\    {"kind": "AlwaysSuccess", "name": "ok-2"}
+            \\  ]}}
+        ;
+        var tree = try factory.loadFromJson(ctx, json);
+        defer tree.deinit();
+
+        try std.testing.expectEqual(.running, tree.tick());
+        try std.testing.expectEqual(.running, tree.tick());
+        try std.testing.expectEqual(.success, tree.tick());
+    }
+
+    {
+        var diag: Diagnostics = .{};
+        const json =
+            \\{"root": {"kind": "Parallel", "name": "par", "params": {"success_threshold": 3},
+            \\  "children": [{"kind": "AlwaysSuccess", "name": "a"}, {"kind": "AlwaysSuccess", "name": "b"}]}}
+        ;
+        try std.testing.expectError(error.InvalidSuccessThreshold, factory.loadFromJsonDiag(ctx, json, &diag));
+        try std.testing.expectEqualStrings(
+            "root: failed to configure node 'par' of kind 'Parallel': InvalidSuccessThreshold",
+            diag.message(),
+        );
+    }
+
+    {
+        var diag: Diagnostics = .{};
+        const json =
+            \\{"root": {"kind": "Repeat", "name": "rep", "child": {"kind": "AlwaysSuccess", "name": "a"}}}
+        ;
+        try std.testing.expectError(error.MissingNumCycles, factory.loadFromJsonDiag(ctx, json, &diag));
+    }
+}

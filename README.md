@@ -29,8 +29,20 @@ that ticks up to a retry count.
 ## Use
 
 Bonzai is built around a generic `Node` type and a `Factory` to register and instantiate specific
-node implementations. While Bonzai has a few basic node types included (such as Sequence, Fallback,
-Inverter), it is expected that users will implement their own nodes for their own use case.
+node implementations. While Bonzai has a few basic node types included, it is expected that users
+will implement their own nodes for their own use case. The built-in types are:
+
+| Kind      | Type              | Behavior                                                                  |
+|-----------|-------------------|---------------------------------------------------------------------------|
+| Control   | `Sequence`        | Ticks children in order until one fails or is running                     |
+| Control   | `Fallback`        | Ticks children in order until one succeeds or is running                  |
+| Control   | `Parallel`        | Ticks all children every tick; params `success_threshold` (default: all), `failure_threshold` (default: 1) |
+| Decorator | `Inverter`        | Swaps the child's Success and Failure                                     |
+| Decorator | `Repeat`          | Repeats the child until it succeeds `num_cycles` times (-1: forever); one cycle per tick |
+| Decorator | `RunUntilSuccess` | Re-runs the child after each failure until it succeeds                    |
+| Action    | `AlwaysRunning`   | Always returns Running                                                    |
+| Condition | `AlwaysSuccess`   | Always returns Success                                                    |
+| Condition | `AlwaysFailure`   | Always returns Failure                                                    |
 
 ### Custom Node types
 

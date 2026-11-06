@@ -35,7 +35,12 @@ test "[Tree] Tick tree with logger" {
     var logger: bonzai.loggers.StdoutLogger = .init(io);
     try tree.addLogger(logger.interface());
 
-    for (1..custom_context.num_ticks) |_| {
+    // The DummyAction was configured from its "max_ticks" param (3), which takes
+    // precedence over `custom_context.num_ticks`
+    const dummy = tree.root.?.data.control.getChild(0).as(DummyAction);
+    try std.testing.expectEqual(@as(usize, 3), dummy.max_ticks);
+
+    for (1..dummy.max_ticks) |_| {
         try std.testing.expectEqual(.running, tree.tick());
     }
     try std.testing.expectEqual(.success, tree.tick());

@@ -44,14 +44,20 @@ const Retry = struct {
 
     // Per-instance state; every field needs a default value
     attempts: u32 = 0,
+    max_attempts: u32 = 3,
+
+    // Optional: read params once, after the node (and its children) are loaded.
+    // Errors are reported by the Factory with the node's location in the JSON.
+    pub fn configure(self: *Retry, node: *bonzai.Node) !void {
+        self.max_attempts = (try node.getParam(u32, "max_attempts")) orelse self.max_attempts;
+    }
 
     // Required. The `node` parameter is optional if you don't need it.
     pub fn tick(self: *Retry, node: *bonzai.Node) bonzai.Node.Status {
-        const max = if (node.getValue("max_attempts")) |v| v.int else 3;
         return switch (node.data.decorator.tick()) {
             .failure => blk: {
                 self.attempts += 1;
-                if (self.attempts >= max) break :blk .failure;
+                if (self.attempts >= self.max_attempts) break :blk .failure;
                 node.data.decorator.halt();
                 break :blk .running;
             },
@@ -73,6 +79,11 @@ try factory.register("Retry", Retry);
 
 Actions may instead implement `onStarted` (optional), `onRunning`, and `onHalted` (optional),
 which are called on the first tick, on subsequent ticks while Running, and when halted.
+
+`node.getParam(T, key)` converts a param to an integer (range-checked), float, bool, string, or
+enum (by tag name), returning null if it is absent. When creating nodes directly with
+`NodeImpl(T).create()` instead of the Factory, set params with `node.putValue()` and then call
+`node.configure()`.
 
 To get from a base `*Node` to your type, use `node.as(Retry)` (asserts the type) or
 `node.tryAs(Retry)` (returns null for other types); to go back, use `bonzai.nodeOf(self)`.
@@ -156,7 +167,12 @@ test "[Tree] Tick tree with logger" {
     try tree.addLogger(logger.interface());
 
     // Tick the tree to completion
-    for (1..custom_context.num_ticks) |_| {
+    // The DummyAction was configured from its "max_ticks" param (3), which takes
+    // precedence over `custom_context.num_ticks`
+    const dummy = tree.root.?.data.control.getChild(0).as(DummyAction);
+    try std.testing.expectEqual(@as(usize, 3), dummy.max_ticks);
+
+    for (1..dummy.max_ticks) |_| {
         try std.testing.expectEqual(.running, tree.tick());
     }
     try std.testing.expectEqual(.success, tree.tick());

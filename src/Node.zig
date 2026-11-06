@@ -73,6 +73,9 @@ pub const VTable = struct {
     /// Deinitialize the node, freeing any resources it may have, and also deallocating itself
     /// TODO: Split into optional "deinit" (called before anything gets freed) and a required "destroy" (called at the very end)
     deinit: *const fn (node: *Node, alloc: Allocator) void,
+    /// Configure the node from the values in its Blackboard (e.g. params loaded from JSON).
+    /// Called by the Factory once the node and all of its children have been created.
+    configure: ?*const fn (node: *Node) anyerror!void = null,
     /// Identifies the implementation type, for checked casts. Set by `NodeImpl`.
     type_id: ?TypeId = null,
     /// The name of the implementation type, for error messages. Set by `NodeImpl`.
@@ -168,6 +171,64 @@ pub fn putValue(node: *Node, key: []const u8, value: BlackboardValue) !void {
     try bb.put(&node.blackboard, key, value);
 }
 
+/// Configure the node from its Blackboard values by calling its `configure` hook, if any.
+/// The Factory calls this automatically when loading a tree; call it yourself after
+/// `putValue()` when creating nodes manually.
+pub fn configure(node: *Node) !void {
+    if (node.vtable.configure) |f| try f(node);
+}
+
+pub const ParamError = error{
+    /// The value's type cannot be converted to the requested type
+    InvalidParamType,
+    /// The integer value does not fit in the requested type
+    ParamOutOfRange,
+};
+
+/// Get a value from the Node's Blackboard, converted to type `T`; null if the key is absent.
+///
+/// Supported types:
+/// - integers: from an int value, with a range check
+/// - floats: from a float or int value
+/// - bool: from a bool value
+/// - []const u8: from a string value (borrowed; valid until the value is replaced or the node is freed)
+/// - enums: from a string value matching a tag name
+///
+/// Example: `const retries = (try node.getParam(u32, "retries")) orelse 3;`
+pub fn getParam(node: *const Node, comptime T: type, key: []const u8) ParamError!?T {
+    const value = node.blackboard.get(key) orelse return null;
+    return try convertParam(T, value);
+}
+
+fn convertParam(comptime T: type, value: BlackboardValue) ParamError!T {
+    switch (@typeInfo(T)) {
+        .int => return switch (value) {
+            .int => |i| std.math.cast(T, i) orelse error.ParamOutOfRange,
+            else => error.InvalidParamType,
+        },
+        .float => return switch (value) {
+            .float => |f| @floatCast(f),
+            .int => |i| @floatFromInt(i),
+            else => error.InvalidParamType,
+        },
+        .bool => return switch (value) {
+            .bool => |b| b,
+            else => error.InvalidParamType,
+        },
+        .@"enum" => return switch (value) {
+            .string => |s| std.meta.stringToEnum(T, s) orelse error.InvalidParamType,
+            else => error.InvalidParamType,
+        },
+        else => {
+            if (T != []const u8) @compileError("Node.getParam: unsupported type " ++ @typeName(T));
+            return switch (value) {
+                .string => |s| s,
+                else => error.InvalidParamType,
+            };
+        },
+    }
+}
+
 /// Get the implementation of a Node created by `NodeImpl(T)`.
 /// Asserts (in safe builds) that the node really is a `T`.
 pub fn as(node: *Node, comptime T: type) *T {
@@ -198,3 +259,43 @@ const Logger = @import("Logger.zig");
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+
+////////////////////////////////////////////////////////////////////////////////
+// Unit Tests
+////////////////////////////////////////////////////////////////////////////////
+
+test "[Node] getParam conversions" {
+    const gpa = std.testing.allocator;
+    var ctx = try Context.create(gpa);
+    defer ctx.deinit();
+
+    const Plain = struct {
+        pub const kind: Kind = .action;
+        pub fn tick(_: *@This()) Status {
+            return .success;
+        }
+    };
+    const node = try NodeImpl(Plain).create(gpa, ctx, "n");
+    defer node.deinit(gpa);
+
+    try node.putValue("int", .{ .int = 300 });
+    try node.putValue("neg", .{ .int = -1 });
+    try node.putValue("float", .{ .float = 1.5 });
+    try node.putValue("flag", .{ .bool = true });
+    try node.putValue("mode", .{ .string = "running" });
+
+    const t = std.testing;
+    try t.expectEqual(@as(?u32, 300), try node.getParam(u32, "int"));
+    try t.expectEqual(@as(?f32, 300.0), try node.getParam(f32, "int"));
+    try t.expectEqual(@as(?f64, 1.5), try node.getParam(f64, "float"));
+    try t.expectEqual(@as(?bool, true), try node.getParam(bool, "flag"));
+    try t.expectEqual(@as(?Status, .running), try node.getParam(Status, "mode"));
+    try t.expectEqualStrings("running", (try node.getParam([]const u8, "mode")).?);
+    try t.expectEqual(@as(?u32, null), try node.getParam(u32, "missing"));
+
+    try t.expectError(error.ParamOutOfRange, node.getParam(u8, "int"));
+    try t.expectError(error.ParamOutOfRange, node.getParam(u32, "neg"));
+    try t.expectError(error.InvalidParamType, node.getParam(u32, "float"));
+    try t.expectError(error.InvalidParamType, node.getParam(bool, "int"));
+    try t.expectError(error.InvalidParamType, node.getParam(Kind, "mode"));
+}

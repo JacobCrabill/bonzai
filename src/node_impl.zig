@@ -10,6 +10,7 @@
 //!
 //!     // Per-instance state. Every field must have a default value.
 //!     count: u32 = 0,
+//!     limit: u32 = 10,
 //!
 //!     // Required (unless using the stateful hooks below): called on every tick.
 //!     pub fn tick(self: *MyAction, node: *bonzai.Node) bonzai.Node.Status { ... }
@@ -17,6 +18,12 @@
 //!     // Optional: called when the node is halted (reset to Idle).
 //!     // Children of Controls and Decorators are halted automatically.
 //!     pub fn halt(self: *MyAction, node: *bonzai.Node) void { ... }
+//!
+//!     // Optional: configure the node from its params (e.g. loaded from JSON).
+//!     // Called by the Factory after the node and its children are created.
+//!     pub fn configure(self: *MyAction, node: *bonzai.Node) !void {
+//!         self.limit = (try node.getParam(u32, "limit")) orelse 10;
+//!     }
 //!
 //!     // Optional: release any resources owned by `self`.
 //!     pub fn deinit(self: *MyAction, gpa: std.mem.Allocator) void { ... }
@@ -58,6 +65,7 @@ pub fn NodeImpl(comptime T: type) type {
             .tick = tick,
             .halt = if (@hasDecl(T, "halt") or @hasDecl(T, "onHalted")) halt else null,
             .deinit = deinit,
+            .configure = if (@hasDecl(T, "configure")) configure else null,
             .type_id = typeId(T),
             .type_name = @typeName(T),
         };
@@ -113,6 +121,10 @@ pub fn NodeImpl(comptime T: type) type {
             const impl = &fromNode(node).impl;
             if (@hasDecl(T, "halt")) call(T.halt, impl, node);
             if (@hasDecl(T, "onHalted") and node.status != .idle) call(T.onHalted, impl, node);
+        }
+
+        fn configure(node: *Node) anyerror!void {
+            return call(T.configure, &fromNode(node).impl, node);
         }
 
         fn deinit(node: *Node, gpa: Allocator) void {
@@ -172,6 +184,18 @@ fn validate(comptime T: type) void {
     if (@hasDecl(T, "onStarted")) checkHook(T, "onStarted", Node.Status);
     if (@hasDecl(T, "onRunning")) checkHook(T, "onRunning", Node.Status);
     if (@hasDecl(T, "onHalted")) checkHook(T, "onHalted", void);
+    if (@hasDecl(T, "configure")) {
+        const f = fnInfo(T, "configure");
+        const ret_ok = if (f.return_type) |R| R == void or (@typeInfo(R) == .error_union and @typeInfo(R).error_union.payload == void) else false;
+        const params_ok = switch (f.param_types.len) {
+            1 => f.param_types[0] == *T,
+            2 => f.param_types[0] == *T and f.param_types[1] == *Node,
+            else => false,
+        };
+        if (!ret_ok or !params_ok)
+            @compileError("NodeImpl(" ++ name ++ "): configure must be `pub fn configure(self: *" ++ name ++
+                ", node: *Node) !void` (the `node` parameter and the error union are optional)");
+    }
 
     if (@hasDecl(T, "deinit")) {
         const sig = "`pub fn deinit(self: *" ++ name ++ ") void` or `pub fn deinit(self: *" ++ name ++ ", gpa: Allocator) void`";
@@ -312,6 +336,45 @@ test "[NodeImpl] identical implementations are distinct types" {
     defer node.deinit(gpa);
     try std.testing.expect(node.tryAs(Yes1) != null);
     try std.testing.expect(node.tryAs(Yes2) == null);
+}
+
+test "[NodeImpl] configure" {
+    const gpa = std.testing.allocator;
+    var ctx = try Context.create(gpa);
+    defer ctx.deinit();
+
+    const Limited = struct {
+        pub const kind: Node.Kind = .action;
+        limit: u32 = 1,
+        pub fn configure(self: *@This(), node: *Node) !void {
+            self.limit = (try node.getParam(u32, "limit")) orelse self.limit;
+            if (self.limit == 0) return error.InvalidLimit;
+        }
+        pub fn tick(_: *@This()) Node.Status {
+            return .success;
+        }
+    };
+
+    const node = try NodeImpl(Limited).create(gpa, ctx, "limited");
+    defer node.deinit(gpa);
+
+    try node.configure(); // no params: keep the default
+    try std.testing.expectEqual(@as(u32, 1), node.as(Limited).limit);
+
+    try node.putValue("limit", .{ .int = 5 });
+    try node.configure();
+    try std.testing.expectEqual(@as(u32, 5), node.as(Limited).limit);
+
+    try node.putValue("limit", .{ .int = 0 });
+    try std.testing.expectError(error.InvalidLimit, node.configure());
+
+    try node.putValue("limit", .{ .string = "five" });
+    try std.testing.expectError(error.InvalidParamType, node.configure());
+
+    // Types without a configure hook are a no-op
+    const counter = try NodeImpl(Counter).create(gpa, ctx, "counter");
+    defer counter.deinit(gpa);
+    try counter.configure();
 }
 
 test "[NodeImpl] stateful hooks" {

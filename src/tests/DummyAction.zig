@@ -1,8 +1,9 @@
-//! The DummyAction runs for 4 ticks then returns Success (See the test).
+//! The DummyAction runs for `max_ticks` ticks then returns Success (See the tests).
 //!
 //! It is a "stateful" Action: instead of a single `tick` method, it implements the
 //! onStarted, onRunning, and onHalted hooks, which `bonzai.NodeImpl` dispatches to
-//! based on the node's current status.
+//! based on the node's current status. It also implements `configure` to read its
+//! parameters once, when the tree is loaded.
 const DummyAction = @This();
 const CustomContext = @import("CustomContext.zig");
 
@@ -11,16 +12,28 @@ pub const kind: Node.Kind = .action;
 tick_count: usize = 0,
 max_ticks: usize = 2,
 
+/// Called once after the node is created and its params are loaded.
+/// `max_ticks` comes from the "max_ticks" param if given, else from the Context's
+/// CustomContext data, else the default.
+pub fn configure(self: *DummyAction, node: *Node) !void {
+    if (try node.getParam(usize, "max_ticks")) |max_ticks| {
+        self.max_ticks = max_ticks;
+    } else if (node.context.getData(CustomContext)) |ctx| {
+        self.max_ticks = ctx.num_ticks;
+    }
+    if (self.max_ticks == 0) return error.InvalidMaxTicks;
+
+    std.debug.print("Configured '{s}' with max_ticks = {d}\n", .{ node.name, self.max_ticks });
+}
+
 /// Called on the first tick after being Idle
 pub fn onStarted(self: *DummyAction, node: *Node) Node.Status {
     std.debug.print("Starting myself!\n", .{});
-    self.tick_count = 0;
+    self.tick_count = 1;
 
     // Access the custom contextual data
     if (node.context.getData(CustomContext)) |ctx| {
-        std.debug.print("Found CustomContext data\n", .{});
-        self.max_ticks = ctx.num_ticks;
-        std.debug.print("{s}\n", .{ctx.some_other_data});
+        std.debug.print("Found CustomContext data: {s}\n", .{ctx.some_other_data});
     }
 
     std.debug.print("Private blackboard values:\n", .{});
@@ -34,15 +47,14 @@ pub fn onStarted(self: *DummyAction, node: *Node) Node.Status {
             .bool => |b| std.debug.print("  {s}: {any}\n", .{ key, b }),
         }
     }
-    return .running;
+    return if (self.tick_count >= self.max_ticks) .success else .running;
 }
 
 /// Called on every subsequent tick while Running
 pub fn onRunning(self: *DummyAction) Node.Status {
-    if (self.tick_count >= 2) return .success;
     self.tick_count += 1;
     std.debug.print("Tick count: {d}\n", .{self.tick_count});
-    return .running;
+    return if (self.tick_count >= self.max_ticks) .success else .running;
 }
 
 /// Called when halted while Running (or after completing)
@@ -76,16 +88,20 @@ test "[DummyAction] run to success" {
 
     try std.testing.expectEqualStrings(dummy.name, name);
 
+    // When creating nodes manually (rather than via the Factory), set any params
+    // and then call configure() yourself
+    try dummy.putValue("max_ticks", .{ .int = 4 });
+    try dummy.configure();
+    try std.testing.expectEqual(@as(usize, 4), d.max_ticks);
+
     // We should be able to tick the DummyAction 4 times:
-    // - The first tick calls onStarted()
-    //   - This returns Running
-    // - Subsequent ticks call onRunning()
-    //   - This function should return Running, Running, Success
+    // - The first tick calls onStarted(), which returns Running
+    // - Subsequent ticks call onRunning(), which returns Running, Running, Success
     try std.testing.expectEqual(.running, dummy.tick());
     try std.testing.expectEqual(.running, dummy.tick());
     try std.testing.expectEqual(.running, dummy.tick());
     try std.testing.expectEqual(.success, dummy.tick());
-    try std.testing.expectEqual(@as(usize, 2), d.tick_count);
+    try std.testing.expectEqual(@as(usize, 4), d.tick_count);
 
     dummy.halt();
 
@@ -96,4 +112,20 @@ test "[DummyAction] run to success" {
     try std.testing.expectEqual(.running, dummy.tick());
     try std.testing.expectEqual(.running, dummy.tick());
     try std.testing.expectEqual(.success, dummy.tick());
+}
+
+test "[DummyAction] invalid max_ticks param" {
+    const alloc = std.testing.allocator;
+
+    var ctx = try Context.create(alloc);
+    defer ctx.deinit();
+
+    const dummy: *Node = try bonzai.NodeImpl(DummyAction).create(alloc, ctx, "bad");
+    defer dummy.deinit(alloc);
+
+    try dummy.putValue("max_ticks", .{ .int = 0 });
+    try std.testing.expectError(error.InvalidMaxTicks, dummy.configure());
+
+    try dummy.putValue("max_ticks", .{ .int = -3 });
+    try std.testing.expectError(error.ParamOutOfRange, dummy.configure());
 }

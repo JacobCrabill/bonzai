@@ -45,7 +45,8 @@ pub fn createNode(factory: *const Factory, ctx: *Context, kind: []const u8, name
 }
 
 /// Errors specific to loading a tree definition from JSON.
-/// Loading may also return `error.OutOfMemory`, or any error from a registered BuilderFn.
+/// Loading may also return `error.OutOfMemory`, or any error from a registered BuilderFn
+/// or from a node's `configure` hook.
 pub const LoadError = error{
     /// The input is not syntactically valid JSON
     InvalidJson,
@@ -263,6 +264,12 @@ fn parseNode(
         },
         .action, .condition => {},
     }
+
+    // All params and children are in place; let the node configure itself
+    node.configure() catch |err| {
+        Diagnostics.set(diag, "{s}: failed to configure node '{s}' of kind '{s}': {t}", .{ path, name, kind, err });
+        return err;
+    };
 }
 
 /// Get a required string field from a JSON node definition
@@ -463,4 +470,62 @@ test "[Factory] Load from JSON is leak-free under allocation failure" {
             defer tree.deinit();
         }
     }.run, .{});
+}
+
+test "[Factory] configure hook runs after params and children are loaded" {
+    const gpa = std.testing.allocator;
+    var factory = try testFactory(gpa);
+    defer factory.deinit();
+
+    var ctx = try Context.create(gpa);
+    defer ctx.deinit();
+
+    const Repeat = struct {
+        pub const kind: Node.Kind = .decorator;
+        const Mode = enum { strict, lenient };
+
+        times: u32 = 1,
+        mode: Mode = .strict,
+
+        pub fn configure(self: *@This(), node: *Node) !void {
+            // The child already exists when configure is called
+            if (node.data.decorator.child == null) return error.NoChild;
+            self.times = (try node.getParam(u32, "times")) orelse self.times;
+            self.mode = (try node.getParam(Mode, "mode")) orelse self.mode;
+        }
+
+        pub fn tick(_: *@This(), node: *Node) Node.Status {
+            return node.data.decorator.tick();
+        }
+    };
+    try factory.register("Repeat", Repeat);
+
+    {
+        const json =
+            \\{"root": {"kind": "Repeat", "name": "r", "params": {"times": 3, "mode": "lenient"},
+            \\          "child": {"kind": "AlwaysSuccess", "name": "s"}}}
+        ;
+        var tree = try factory.loadFromJson(ctx, json);
+        defer tree.deinit();
+
+        const repeat = tree.root.?.as(Repeat);
+        try std.testing.expectEqual(@as(u32, 3), repeat.times);
+        try std.testing.expectEqual(.lenient, repeat.mode);
+    }
+
+    {
+        // A failing configure is reported, and the partially-built tree is freed
+        const json =
+            \\{"root": {"kind": "Sequence", "name": "seq", "children": [
+            \\  {"kind": "AlwaysSuccess", "name": "s"},
+            \\  {"kind": "Repeat", "name": "r", "params": {"times": -1},
+            \\   "child": {"kind": "AlwaysSuccess", "name": "s2"}}]}}
+        ;
+        var diag: Diagnostics = .{};
+        try std.testing.expectError(error.ParamOutOfRange, factory.loadFromJsonDiag(ctx, json, &diag));
+        try std.testing.expectEqualStrings(
+            "root.children[1]: failed to configure node 'r' of kind 'Repeat': ParamOutOfRange",
+            diag.message(),
+        );
+    }
 }

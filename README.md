@@ -18,7 +18,7 @@ behavior trees are data structures that map perfectly to OOP.
 
 Custom Context struct types may be given to your trees, providing access to arbitrary shared
 read/write data from your custom node types: create the Context with
-`bonzai.Context.createWithData(gpa, &my_data)`, then retrieve it from any node with
+`bonzai.Context.createWithData(io, gpa, &my_data)`, then retrieve it from any node with
 `node.context.getData(MyData)` (which checks the type in safe builds). The Tree also supports a global key/value Blackboard
 for read/write access to primitive data types, and each Node has its own private Blackboard as well.
 
@@ -100,6 +100,47 @@ enum (by tag name), returning null if it is absent. When creating nodes directly
 To get from a base `*Node` to your type, use `node.as(Retry)` (asserts the type) or
 `node.tryAs(Retry)` (returns null for other types); to go back, use `bonzai.nodeOf(self)`.
 
+### Asynchronous Actions
+
+An Action can run its work in the background, without blocking the ticking of the tree, by
+declaring a `run` hook instead of `tick`. On the first tick, `run` is started with
+`std.Io.concurrent`; on each later tick the node checks (without blocking) whether it has finished,
+returning Running until it has. The job stores its results in the node's own fields, which
+`finish` then uses to decide the node's status:
+
+```zig
+const AsyncFoo = struct {
+    pub const kind: bonzai.Node.Kind = .action;
+
+    delay_ms: i64 = 100,
+    answer: u32 = 0,
+
+    // Optional, on the tick thread: copy inputs before the job starts
+    pub fn prepare(self: *AsyncFoo, node: *bonzai.Node) !void {
+        self.delay_ms = (try node.getParam(i64, "delay_ms")) orelse self.delay_ms;
+    }
+
+    // Required, in the background: `io` operations are cancelation points if the node is halted
+    pub fn run(self: *AsyncFoo, io: std.Io) !void {
+        try io.sleep(.fromMilliseconds(self.delay_ms), .awake);
+        self.answer = 42;
+    }
+
+    // Optional, on the tick thread: called once the job completes (default: Success unless it failed)
+    pub fn finish(self: *AsyncFoo, result: anyerror!void) bonzai.Node.Status {
+        result catch return .failure;
+        return if (self.answer == 42) .success else .failure;
+    }
+};
+
+try factory.register("AsyncFoo", AsyncFoo);
+```
+
+An optional `poll` hook is called on each tick while the job is still running; returning anything
+other than Running (e.g. on a timeout) cancels the job. Halting or destroying the node also cancels
+the job and waits for it to stop. The Context's `Io` must support concurrency (e.g.
+`std.Io.Threaded`); see `src/async_action.zig` for details, including the thread-safety rules.
+
 See `DummyAction.zig` and `src/tests/test.zig` for an example of a stateful Action making use of a
 custom Context data type, registering it with the Factory, loading it via JSON, and making use of it
 from within a Tree.
@@ -156,7 +197,7 @@ test "[Tree] Tick tree with logger" {
         .num_ticks = 4,
         .some_other_data = "Hello, bonzai!",
     };
-    var ctx = try bonzai.Context.createWithData(gpa, &custom_context);
+    var ctx = try bonzai.Context.createWithData(io, gpa, &custom_context);
     defer ctx.deinitWithData();
 
     // Initialize the Factory

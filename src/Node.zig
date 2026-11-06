@@ -266,7 +266,7 @@ const Allocator = std.mem.Allocator;
 
 test "[Node] getParam conversions" {
     const gpa = std.testing.allocator;
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const Plain = struct {

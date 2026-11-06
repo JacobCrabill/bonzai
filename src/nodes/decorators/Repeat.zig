@@ -91,7 +91,7 @@ fn testRepeat(ctx: *Context, num_cycles: i64, child_ticks: u32, child_result: No
 }
 
 test "[Repeat] repeats a child which succeeds immediately" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const rep = try testRepeat(ctx, 3, 1, .success);
@@ -106,7 +106,7 @@ test "[Repeat] repeats a child which succeeds immediately" {
 }
 
 test "[Repeat] repeats a long-running child" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const rep = try testRepeat(ctx, 2, 2, .success);
@@ -121,7 +121,7 @@ test "[Repeat] repeats a long-running child" {
 }
 
 test "[Repeat] fails when the child fails" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const rep = try testRepeat(ctx, 5, 1, .failure);
@@ -133,7 +133,7 @@ test "[Repeat] fails when the child fails" {
 }
 
 test "[Repeat] repeats forever" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const rep = try testRepeat(ctx, -1, 1, .success);
@@ -145,7 +145,7 @@ test "[Repeat] repeats forever" {
 }
 
 test "[Repeat] halting resets the count" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const rep = try testRepeat(ctx, 3, 1, .success);
@@ -163,7 +163,7 @@ test "[Repeat] halting resets the count" {
 
 test "[Repeat] invalid num_cycles" {
     const gpa = std.testing.allocator;
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const rep = try NodeImpl(Repeat).create(gpa, ctx, "repeat");

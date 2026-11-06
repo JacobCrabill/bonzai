@@ -54,7 +54,7 @@ test "[Fallback] run to success" {
     const AlwaysSuccess = @import("../conditions/AlwaysSuccess.zig");
     const AlwaysFailure = @import("../conditions/AlwaysFailure.zig");
 
-    var ctx = try Context.create(alloc);
+    var ctx = try Context.create(std.testing.io, alloc);
     defer ctx.deinit();
 
     const name = "run-to-success";
@@ -79,7 +79,7 @@ test "[Fallback] run to failure" {
     const alloc = std.testing.allocator;
     const AlwaysFailure = @import("../conditions/AlwaysFailure.zig");
 
-    var ctx = try Context.create(alloc);
+    var ctx = try Context.create(std.testing.io, alloc);
     defer ctx.deinit();
 
     const name = "run-to-failure";

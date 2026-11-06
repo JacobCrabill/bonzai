@@ -36,6 +36,10 @@
 //! - `onRunning` (required): every subsequent tick while Running.
 //! - `onHalted`  (optional): called when halted while not Idle.
 //!
+//! Alternatively, an Action may run its work in the background by implementing the
+//! asynchronous hooks `run` (required), `prepare`, `poll`, and `finish`; see
+//! `async_action.zig` for details.
+//!
 //! Every hook takes `self: *T` as its first parameter, and may optionally take
 //! `node: *Node` as its second; `deinit` may optionally take an Allocator instead.
 //!
@@ -53,17 +57,20 @@ pub fn NodeImpl(comptime T: type) type {
 
         node: Node,
         impl: T,
+        /// State of the background job, for asynchronous Actions
+        async_state: if (is_async) async_action.State else void,
 
         /// The user-defined implementation type
         pub const Impl = T;
 
         const stateful = @hasDecl(T, "onRunning");
+        const is_async = async_action.isAsync(T);
 
         /// The vtable shared by all instances of this type. Its `type_id` identifies the
         /// type of a `*Node` at runtime (see `isInstance()`).
         pub const vtable: Node.VTable = .{
             .tick = tick,
-            .halt = if (@hasDecl(T, "halt") or @hasDecl(T, "onHalted")) halt else null,
+            .halt = if (is_async or @hasDecl(T, "halt") or @hasDecl(T, "onHalted")) halt else null,
             .deinit = deinit,
             .configure = if (@hasDecl(T, "configure")) configure else null,
             .type_id = typeId(T),
@@ -78,6 +85,7 @@ pub fn NodeImpl(comptime T: type) type {
             self.* = .{
                 .node = try Node.init(gpa, ctx, name, T.kind, vtable),
                 .impl = .{},
+                .async_state = if (is_async) .{} else {},
             };
             return &self.node;
         }
@@ -102,12 +110,22 @@ pub fn NodeImpl(comptime T: type) type {
             return &self.node;
         }
 
+        /// For asynchronous Actions: true if the node's background job has been started
+        /// and its result not yet collected.
+        pub fn isJobPending(node: *Node) bool {
+            if (!is_async) @compileError("NodeImpl(" ++ @typeName(T) ++ ").isJobPending: not an asynchronous Action");
+            _ = cast(node); // type check
+            return fromNode(node).async_state.isPending();
+        }
+
         fn fromNode(node: *Node) *Self {
             return @alignCast(@fieldParentPtr("node", node));
         }
 
         fn tick(node: *Node) Node.Status {
-            const impl = &fromNode(node).impl;
+            const self = fromNode(node);
+            const impl = &self.impl;
+            if (is_async) return async_action.tick(T, impl, &self.async_state, node);
             if (!stateful) return call(T.tick, impl, node);
 
             return switch (node.status) {
@@ -118,7 +136,10 @@ pub fn NodeImpl(comptime T: type) type {
         }
 
         fn halt(node: *Node) void {
-            const impl = &fromNode(node).impl;
+            const self = fromNode(node);
+            const impl = &self.impl;
+            // Stop any background job before the implementation resets its state
+            if (is_async) async_action.halt(&self.async_state, node);
             if (@hasDecl(T, "halt")) call(T.halt, impl, node);
             if (@hasDecl(T, "onHalted") and node.status != .idle) call(T.onHalted, impl, node);
         }
@@ -129,6 +150,8 @@ pub fn NodeImpl(comptime T: type) type {
 
         fn deinit(node: *Node, gpa: Allocator) void {
             const self = fromNode(node);
+            // The background job holds a pointer to `self`; it must stop before we free it
+            if (is_async) self.async_state.cancel(node.context.io);
             if (@hasDecl(T, "deinit")) {
                 const params = @typeInfo(@TypeOf(T.deinit)).@"fn".param_types;
                 if (params.len == 2) T.deinit(&self.impl, gpa) else T.deinit(&self.impl);
@@ -168,6 +191,14 @@ fn validate(comptime T: type) void {
             @compileError("NodeImpl(" ++ name ++ "): field '" ++ field ++ "' must have a default value");
     }
 
+    if (async_action.isAsync(T)) {
+        async_action.validate(T);
+        if (@hasDecl(T, "halt")) checkHook(T, "halt", void);
+        if (@hasDecl(T, "configure")) checkConfigure(T);
+        if (@hasDecl(T, "deinit")) checkDeinit(T);
+        return;
+    }
+
     const has_tick = @hasDecl(T, "tick");
     const has_stateful = @hasDecl(T, "onRunning") or @hasDecl(T, "onStarted") or @hasDecl(T, "onHalted");
     if (has_tick and has_stateful)
@@ -175,7 +206,8 @@ fn validate(comptime T: type) void {
     if (has_stateful and !@hasDecl(T, "onRunning"))
         @compileError("NodeImpl(" ++ name ++ "): stateful nodes must declare `onRunning`");
     if (!has_tick and !has_stateful)
-        @compileError("NodeImpl(" ++ name ++ "): missing `pub fn tick(self: *" ++ name ++ ", node: *Node) Node.Status`");
+        @compileError("NodeImpl(" ++ name ++ "): missing `pub fn tick(self: *" ++ name ++ ", node: *Node) Node.Status` " ++
+            "(or the stateful hooks onStarted/onRunning/onHalted, or the asynchronous hook `run`)");
     if (has_stateful and kind != .action)
         @compileError("NodeImpl(" ++ name ++ "): stateful hooks are only supported for kind = .action");
 
@@ -184,29 +216,34 @@ fn validate(comptime T: type) void {
     if (@hasDecl(T, "onStarted")) checkHook(T, "onStarted", Node.Status);
     if (@hasDecl(T, "onRunning")) checkHook(T, "onRunning", Node.Status);
     if (@hasDecl(T, "onHalted")) checkHook(T, "onHalted", void);
-    if (@hasDecl(T, "configure")) {
-        const f = fnInfo(T, "configure");
-        const ret_ok = if (f.return_type) |R| R == void or (@typeInfo(R) == .error_union and @typeInfo(R).error_union.payload == void) else false;
-        const params_ok = switch (f.param_types.len) {
-            1 => f.param_types[0] == *T,
-            2 => f.param_types[0] == *T and f.param_types[1] == *Node,
-            else => false,
-        };
-        if (!ret_ok or !params_ok)
-            @compileError("NodeImpl(" ++ name ++ "): configure must be `pub fn configure(self: *" ++ name ++
-                ", node: *Node) !void` (the `node` parameter and the error union are optional)");
-    }
+    if (@hasDecl(T, "configure")) checkConfigure(T);
+    if (@hasDecl(T, "deinit")) checkDeinit(T);
+}
 
-    if (@hasDecl(T, "deinit")) {
-        const sig = "`pub fn deinit(self: *" ++ name ++ ") void` or `pub fn deinit(self: *" ++ name ++ ", gpa: Allocator) void`";
-        const f = fnInfo(T, "deinit");
-        const ok = f.return_type == void and switch (f.param_types.len) {
-            1 => f.param_types[0] == *T,
-            2 => f.param_types[0] == *T and f.param_types[1] == Allocator,
-            else => false,
-        };
-        if (!ok) @compileError("NodeImpl(" ++ name ++ "): deinit must be " ++ sig);
-    }
+fn checkConfigure(comptime T: type) void {
+    const name = @typeName(T);
+    const f = fnInfo(T, "configure");
+    const ret_ok = if (f.return_type) |R| R == void or (@typeInfo(R) == .error_union and @typeInfo(R).error_union.payload == void) else false;
+    const params_ok = switch (f.param_types.len) {
+        1 => f.param_types[0] == *T,
+        2 => f.param_types[0] == *T and f.param_types[1] == *Node,
+        else => false,
+    };
+    if (!ret_ok or !params_ok)
+        @compileError("NodeImpl(" ++ name ++ "): configure must be `pub fn configure(self: *" ++ name ++
+            ", node: *Node) !void` (the `node` parameter and the error union are optional)");
+}
+
+fn checkDeinit(comptime T: type) void {
+    const name = @typeName(T);
+    const sig = "`pub fn deinit(self: *" ++ name ++ ") void` or `pub fn deinit(self: *" ++ name ++ ", gpa: Allocator) void`";
+    const f = fnInfo(T, "deinit");
+    const ok = f.return_type == void and switch (f.param_types.len) {
+        1 => f.param_types[0] == *T,
+        2 => f.param_types[0] == *T and f.param_types[1] == Allocator,
+        else => false,
+    };
+    if (!ok) @compileError("NodeImpl(" ++ name ++ "): deinit must be " ++ sig);
 }
 
 fn checkHook(comptime T: type, comptime hook: []const u8, comptime Ret: type) void {
@@ -231,6 +268,7 @@ fn fnInfo(comptime T: type, comptime decl: []const u8) std.lang.Type.Fn {
 const Node = @import("Node.zig");
 const Context = @import("Context.zig");
 const typeId = @import("type_id.zig").typeId;
+const async_action = @import("async_action.zig");
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
@@ -286,7 +324,7 @@ const Stateful = struct {
 
 test "[NodeImpl] tick, halt, cast, deinit" {
     const gpa = std.testing.allocator;
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     var deinit_called = false;
@@ -316,7 +354,7 @@ test "[NodeImpl] tick, halt, cast, deinit" {
 
 test "[NodeImpl] identical implementations are distinct types" {
     const gpa = std.testing.allocator;
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const Yes1 = struct {
@@ -340,7 +378,7 @@ test "[NodeImpl] identical implementations are distinct types" {
 
 test "[NodeImpl] configure" {
     const gpa = std.testing.allocator;
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const Limited = struct {
@@ -379,7 +417,7 @@ test "[NodeImpl] configure" {
 
 test "[NodeImpl] stateful hooks" {
     const gpa = std.testing.allocator;
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const node = try NodeImpl(Stateful).create(gpa, ctx, "stateful");

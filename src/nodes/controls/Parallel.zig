@@ -100,7 +100,7 @@ fn childAt(par: *Node, i: usize) *Countdown {
 }
 
 test "[Parallel] default thresholds: all must succeed" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const par = try testParallel(ctx, &.{ .{ 1, .success }, .{ 3, .success }, .{ 2, .success } });
@@ -120,7 +120,7 @@ test "[Parallel] default thresholds: all must succeed" {
 }
 
 test "[Parallel] default thresholds: any failure fails" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const par = try testParallel(ctx, &.{ .{ 5, .success }, .{ 2, .failure } });
@@ -136,7 +136,7 @@ test "[Parallel] default thresholds: any failure fails" {
 }
 
 test "[Parallel] success threshold" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     // 2 of 3 must succeed; one child never finishes in time
@@ -152,7 +152,7 @@ test "[Parallel] success threshold" {
 }
 
 test "[Parallel] fails once the success threshold is unreachable" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     // 2 of 3 must succeed, and up to 3 may fail; after 2 failures success is impossible
@@ -167,7 +167,7 @@ test "[Parallel] fails once the success threshold is unreachable" {
 }
 
 test "[Parallel] failure threshold" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     // 1 success is enough, and it takes 2 failures to fail
@@ -182,7 +182,7 @@ test "[Parallel] failure threshold" {
 }
 
 test "[Parallel] success takes precedence when both thresholds are reached" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const par = try testParallel(ctx, &.{ .{ 1, .failure }, .{ 1, .success } });
@@ -194,7 +194,7 @@ test "[Parallel] success takes precedence when both thresholds are reached" {
 }
 
 test "[Parallel] restarts after being halted" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const par = try testParallel(ctx, &.{ .{ 1, .success }, .{ 2, .success } });
@@ -211,7 +211,7 @@ test "[Parallel] restarts after being halted" {
 }
 
 test "[Parallel] invalid thresholds" {
-    var ctx = try Context.create(std.testing.allocator);
+    var ctx = try Context.create(std.testing.io, std.testing.allocator);
     defer ctx.deinit();
 
     const par = try testParallel(ctx, &.{ .{ 1, .success }, .{ 1, .success } });

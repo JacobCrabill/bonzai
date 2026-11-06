@@ -97,7 +97,7 @@ test "[Tree] Add Logger, No Nodes" {
     const io = std.testing.io;
     const alloc = std.testing.allocator;
 
-    var ctx = try Context.create(alloc);
+    var ctx = try Context.create(std.testing.io, alloc);
     defer ctx.deinit();
 
     var tree = Tree.init(io, alloc, ctx);

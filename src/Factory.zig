@@ -331,7 +331,7 @@ test "[Factory] Register & Create Nodes" {
     var factory = try Factory.init(std.testing.io, gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const Sequence = @import("nodes/controls/Sequence.zig");
@@ -351,7 +351,7 @@ test "[Factory] Load from JSON" {
     var factory = try Factory.init(std.testing.io, gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const Sequence = @import("nodes/controls/Sequence.zig");
@@ -386,7 +386,7 @@ test "[Factory] JSON errors are reported without leaking" {
     var factory = try testFactory(gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const Case = struct { json: []const u8, err: anyerror, msg: []const u8 };
@@ -445,7 +445,7 @@ test "[Factory] Load same tree twice into one Context" {
     var factory = try testFactory(gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const json = @embedFile("tests/json/test-tree.json");
@@ -463,7 +463,7 @@ test "[Factory] Load from JSON is leak-free under allocation failure" {
             var factory = try testFactory(gpa);
             defer factory.deinit();
 
-            var ctx = try Context.create(gpa);
+            var ctx = try Context.create(std.testing.io, gpa);
             defer ctx.deinit();
 
             var tree = try factory.loadFromJson(ctx, @embedFile("tests/json/test-tree.json"));
@@ -477,7 +477,7 @@ test "[Factory] configure hook runs after params and children are loaded" {
     var factory = try testFactory(gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     const Repeat = struct {
@@ -535,7 +535,7 @@ test "[Factory] Load Parallel and Repeat from JSON" {
     var factory = try testFactory(gpa);
     defer factory.deinit();
 
-    var ctx = try Context.create(gpa);
+    var ctx = try Context.create(std.testing.io, gpa);
     defer ctx.deinit();
 
     {

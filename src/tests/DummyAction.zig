@@ -75,7 +75,7 @@ const std = @import("std");
 test "[DummyAction] run to success" {
     const alloc = std.testing.allocator;
 
-    var ctx = try Context.create(alloc);
+    var ctx = try Context.create(std.testing.io, alloc);
     defer ctx.deinit();
 
     const name = "run-to-success";
@@ -117,7 +117,7 @@ test "[DummyAction] run to success" {
 test "[DummyAction] invalid max_ticks param" {
     const alloc = std.testing.allocator;
 
-    var ctx = try Context.create(alloc);
+    var ctx = try Context.create(std.testing.io, alloc);
     defer ctx.deinit();
 
     const dummy: *Node = try bonzai.NodeImpl(DummyAction).create(alloc, ctx, "bad");

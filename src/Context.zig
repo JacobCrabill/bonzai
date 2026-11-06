@@ -2,6 +2,9 @@
 //! and stores contextual information about the execution of the behavior tree.
 const Context = @This();
 
+/// The Io implementation shared across the tree, e.g. for timers and background work
+io: std.Io,
+
 /// General-purpose allocator shared across the tree
 gpa: std.mem.Allocator,
 
@@ -22,9 +25,10 @@ data_type_name: []const u8 = "",
 data_deinit: ?*const fn (data: *anyopaque, gpa: Allocator) void = null,
 
 /// Initialize a new Context struct
-pub fn create(gpa: Allocator) !*Context {
+pub fn create(io: std.Io, gpa: Allocator) !*Context {
     const self = try gpa.create(Context);
     self.* = .{
+        .io = io,
         .gpa = gpa,
         .blackboard = Blackboard.init(gpa),
     };
@@ -37,9 +41,9 @@ pub fn create(gpa: Allocator) !*Context {
 /// If the data type has a `deinit` method, `deinitWithData()` will call it. The method must
 /// take the form of either `pub fn deinit(self: *T) void` or
 /// `pub fn deinit(self: *T, gpa: std.mem.Allocator) void`.
-pub fn createWithData(gpa: Allocator, data: anytype) !*Context {
+pub fn createWithData(io: std.Io, gpa: Allocator, data: anytype) !*Context {
     const T = DataType(@TypeOf(data));
-    const self = try create(gpa);
+    const self = try create(io, gpa);
     self.data = @ptrCast(data);
     self.data_type = typeId(T);
     self.data_type_name = @typeName(T);
@@ -145,7 +149,7 @@ test "[Context] getData" {
     const Data = struct { value: u32 };
     var data: Data = .{ .value = 42 };
 
-    var ctx = try Context.createWithData(gpa, &data);
+    var ctx = try Context.createWithData(std.testing.io, gpa, &data);
     defer ctx.deinit();
 
     const d = ctx.getData(Data).?;
@@ -153,7 +157,7 @@ test "[Context] getData" {
     d.value += 1;
     try std.testing.expectEqual(@as(u32, 43), data.value);
 
-    var empty = try Context.create(gpa);
+    var empty = try Context.create(std.testing.io, gpa);
     defer empty.deinit();
     try std.testing.expect(empty.getData(Data) == null);
 }
@@ -169,7 +173,7 @@ test "[Context] deinitWithData calls the data's deinit" {
         }
     };
     var a: WithAlloc = .{ .buf = try gpa.alloc(u8, 16) };
-    var ctx_a = try Context.createWithData(gpa, &a);
+    var ctx_a = try Context.createWithData(std.testing.io, gpa, &a);
     ctx_a.deinitWithData(); // the testing allocator would report a leak otherwise
 
     // deinit(self: *T)
@@ -180,19 +184,19 @@ test "[Context] deinitWithData calls the data's deinit" {
         }
     };
     var b: NoAlloc = .{};
-    var ctx_b = try Context.createWithData(gpa, &b);
+    var ctx_b = try Context.createWithData(std.testing.io, gpa, &b);
     ctx_b.deinitWithData();
     try std.testing.expect(b.called);
 
     // No deinit method at all
     const Plain = struct { x: u32 = 0 };
     var c: Plain = .{};
-    var ctx_c = try Context.createWithData(gpa, &c);
+    var ctx_c = try Context.createWithData(std.testing.io, gpa, &c);
     ctx_c.deinitWithData();
 
     // Plain deinit() leaves the data alone
     var b2: NoAlloc = .{};
-    var ctx_d = try Context.createWithData(gpa, &b2);
+    var ctx_d = try Context.createWithData(std.testing.io, gpa, &b2);
     ctx_d.deinit();
     try std.testing.expect(!b2.called);
 }

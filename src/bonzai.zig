@@ -9,6 +9,7 @@ pub const Tree = @import("Tree.zig");
 pub const Factory = @import("Factory.zig");
 pub const Logger = @import("Logger.zig");
 pub const blackboard = @import("blackboard.zig");
+pub const SimulatedClock = @import("SimulatedClock.zig");
 
 pub const base_types = struct {
     pub const Decorator = @import("base_types/Decorator.zig");
@@ -29,6 +30,7 @@ pub const nodes = struct {
         pub const Inverter = @import("nodes/decorators/Inverter.zig");
         pub const RunUntilSuccess = @import("nodes/decorators/RunUntilSuccess.zig");
         pub const Repeat = @import("nodes/decorators/Repeat.zig");
+        pub const TryUntilTimeout = @import("nodes/decorators/TryUntilTimeout.zig");
     };
 
     pub const controls = struct {
@@ -50,6 +52,7 @@ pub fn registerBuiltinTypes(factory: *Factory) !void {
     try factory.register("Inverter", nodes.decorators.Inverter);
     try factory.register("RunUntilSuccess", nodes.decorators.RunUntilSuccess);
     try factory.register("Repeat", nodes.decorators.Repeat);
+    try factory.register("TryUntilTimeout", nodes.decorators.TryUntilTimeout);
     try factory.register("AlwaysRunning", nodes.actions.AlwaysRunning);
     try factory.register("AlwaysSuccess", nodes.conditions.AlwaysSuccess);
     try factory.register("AlwaysFailure", nodes.conditions.AlwaysFailure);

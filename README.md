@@ -39,6 +39,7 @@ will implement their own nodes for their own use case. The built-in types are:
 | Control   | `Parallel`        | Ticks all children every tick; params `success_threshold` (default: all), `failure_threshold` (default: 1) |
 | Decorator | `Inverter`        | Swaps the child's Success and Failure                                     |
 | Decorator | `Repeat`          | Repeats the child until it succeeds `num_cycles` times (-1: forever); one cycle per tick |
+| Decorator | `TryUntilTimeout` | Passes through the child's status, but fails (halting the child) if it is still Running after `timeout_ms` |
 | Decorator | `RunUntilSuccess` | Re-runs the child after each failure until it succeeds                    |
 | Action    | `AlwaysRunning`   | Always returns Running                                                    |
 | Condition | `AlwaysSuccess`   | Always returns Success                                                    |
@@ -140,6 +141,29 @@ An optional `poll` hook is called on each tick while the job is still running; r
 other than Running (e.g. on a timeout) cancels the job. Halting or destroying the node also cancels
 the job and waits for it to stop. The Context's `Io` must support concurrency (e.g.
 `std.Io.Threaded`); see `src/async_action.zig` for details, including the thread-safety rules.
+
+### Deterministic time
+
+Nodes measure and wait for time through the Context's `std.Io` (e.g. `TryUntilTimeout`, or an
+asynchronous Action which sleeps). `bonzai.SimulatedClock` is an `Io` implementation which forwards
+everything to another `Io`, except that time only passes when you say so, which makes
+time-dependent trees fully reproducible in tests:
+
+```zig
+var sim: bonzai.SimulatedClock = .init(std.testing.io, .{});
+var ctx = try bonzai.Context.create(sim.io(), gpa);
+// ... load a tree with a TryUntilTimeout (timeout_ms = 20) around a long-running child
+
+try expectEqual(.running, tree.tick());
+sim.advance(.fromMilliseconds(19));
+try expectEqual(.running, tree.tick());
+sim.advance(.fromMilliseconds(1));
+try expectEqual(.failure, tree.tick()); // timed out, exactly at 20ms
+```
+
+Sleeps (including those in background jobs) wake when the simulated time passes their deadline,
+and remain cancelable. Since background jobs run on real threads, use `sim.waitForSleepers(n)`
+to wait until they are blocked on the simulated clock before advancing it.
 
 See `DummyAction.zig` and `src/tests/test.zig` for an example of a stateful Action making use of a
 custom Context data type, registering it with the Factory, loading it via JSON, and making use of it
